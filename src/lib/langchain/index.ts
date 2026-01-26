@@ -16,5 +16,10 @@ export {
 } from './prompts';
 
 // 对话链
-export { createChatChain, chat, simpleChat } from './chain';
-export type { ChatRequestParams, ChatResponse } from './chain';
+export { createChatChain, chat, chatStream, simpleChat } from './chain';
+export type {
+  ChatRequestParams,
+  ChatResponse,
+  StreamChatResponse,
+  StreamChatErrorResponse,
+} from './chain';

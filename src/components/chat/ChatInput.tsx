@@ -1,19 +1,23 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Plus } from 'lucide-react';
+import { Send, Plus, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
+  onStop?: () => void;
   disabled?: boolean;
+  isStreaming?: boolean;
   placeholder?: string;
 }
 
 export function ChatInput({
   onSend,
+  onStop,
   disabled = false,
+  isStreaming = false,
   placeholder = '输入你的旅行问题...',
 }: ChatInputProps) {
   const [input, setInput] = useState('');
@@ -66,19 +70,29 @@ export function ChatInput({
             )}
           />
 
-          <Button
-            size="icon"
-            className={cn(
-              'h-9 w-9 shrink-0 rounded-xl',
-              input.trim()
-                ? 'bg-blue-500 text-white hover:bg-blue-600'
-                : 'bg-neutral-200 text-neutral-400'
-            )}
-            onClick={handleSubmit}
-            disabled={!input.trim() || disabled}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+          {isStreaming ? (
+            <Button
+              size="icon"
+              className="h-9 w-9 shrink-0 rounded-xl bg-red-500 text-white hover:bg-red-600"
+              onClick={onStop}
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              size="icon"
+              className={cn(
+                'h-9 w-9 shrink-0 rounded-xl',
+                input.trim()
+                  ? 'bg-blue-500 text-white hover:bg-blue-600'
+                  : 'bg-neutral-200 text-neutral-400'
+              )}
+              onClick={handleSubmit}
+              disabled={!input.trim() || disabled}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
         </div>
         <p className="mt-2 text-center text-xs text-neutral-400">
           Travel Assistant 可能会出错，请核实重要信息

@@ -113,35 +113,41 @@
 
 ### 任务清单
 
-- [ ] **2.1 后端流式改造**
-  - 学习 LangChain 的 `.stream()` 方法
-  - 后端返回 SSE（Server-Sent Events）
-  - 处理流式传输的 chunk
+- [✅] **2.1 后端流式改造**
+  - LangChain 的 `.stream()` 方法（chatStream 函数）
+  - 后端返回 SSE（Server-Sent Events）格式响应
+  - 处理流式传输的 chunk（TransformStream 转换）
+  - API 支持 `stream=true` 参数，向后兼容
 
-- [ ] **2.2 前端流式接收**
-  - 使用 Vercel AI SDK 的 `useChat`（推荐）
-  - 或手动实现 EventSource 接收
-  - 实时更新消息内容
+- [✅] **2.2 前端流式接收**
+  - 自定义 SSE 解析（services/chat.ts sendStreamMessage）
+  - 支持请求取消（AbortController）
+  - 实时更新消息内容（先添加空消息占位，再增量更新）
+  - isStreaming 状态区分加载与流式传输
 
 - [✅] **2.3 交互优化**
   - 添加加载状态指示（跳动圆点动画）
-  - 实现"停止生成"按钮（待实现流式后添加）
+  - 实现"停止生成"按钮（红色方形按钮）
   - 处理网络错误和重试（request.ts 统一封装）
   - 请求超时控制（AI 聊天 2 分钟超时）
   - 请求服务层封装（services/chat.ts）
 
 ### 验收标准
 
-- [ ] AI 回复像打字一样逐字出现
-- [ ] 生成过程中能看到加载状态
-- [ ] 可以中断正在生成的回复
+- [✅] AI 回复像打字一样逐字出现
+- [✅] 生成过程中能看到实时内容更新
+- [✅] 可以中断正在生成的回复（停止按钮）
 
 ### 学习要点
 
 - SSE 原理和实现
-- 流式数据处理
-- 前端状态管理
+- 流式数据处理（ReadableStream、TransformStream）
+- 前端状态管理（isLoading vs isStreaming）
 - 错误处理和用户体验
+
+### 相关文档
+
+- OpenSpec Change: `openspec/changes/add-streaming-output/`
 
 ---
 
@@ -254,4 +260,4 @@
 
 ---
 
-_最后更新：2026-01-26_
+_最后更新：2026-01-26（阶段 2 完成）_

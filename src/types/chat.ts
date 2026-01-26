@@ -65,6 +65,8 @@ export interface ChatApiRequest {
   message: string;
   /** 历史消息（可选） */
   history?: ApiMessage[];
+  /** 是否启用流式输出（默认 false） */
+  stream?: boolean;
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   SystemMessage,
 } from '@langchain/core/messages';
 import { RunnableSequence } from '@langchain/core/runnables';
+import { IterableReadableStream } from '@langchain/core/utils/stream';
 
 import type { Message } from '@/types';
 
@@ -42,6 +43,23 @@ interface ChatResponse {
   success: boolean;
   /** 错误信息（如果有） */
   error?: string;
+}
+
+/**
+ * 流式聊天响应
+ */
+interface StreamChatResponse {
+  /** 流式响应迭代器 */
+  stream: IterableReadableStream<string>;
+  /** 是否成功 */
+  success: true;
+}
+
+interface StreamChatErrorResponse {
+  /** 是否成功 */
+  success: false;
+  /** 错误信息 */
+  error: string;
 }
 
 /**
@@ -115,6 +133,56 @@ export async function chat(params: ChatRequestParams): Promise<ChatResponse> {
 }
 
 /**
+ * 执行流式聊天请求
+ * @param params - 聊天请求参数
+ * @returns 流式聊天响应
+ */
+export async function chatStream(
+  params: ChatRequestParams
+): Promise<StreamChatResponse | StreamChatErrorResponse> {
+  const { input, history = [], modelOptions } = params;
+
+  try {
+    const chain = createChatChain(modelOptions);
+    const historyMessages = convertToLangChainMessages(history);
+
+    // 使用 stream 方法获取流式响应
+    const stream = await chain.stream({
+      input,
+      history: historyMessages,
+    });
+
+    // 转换为字符串流
+    const textStream = stream.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          // 提取内容字符串
+          const content =
+            typeof chunk.content === 'string'
+              ? chunk.content
+              : JSON.stringify(chunk.content);
+          controller.enqueue(content);
+        },
+      })
+    );
+
+    return {
+      stream: IterableReadableStream.fromReadableStream(textStream),
+      success: true,
+    };
+  } catch (error) {
+    console.error('Chat stream error:', error);
+
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
+
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
  * 简单聊天（无历史记录）
  * 用于快速测试
  */
@@ -133,4 +201,9 @@ export async function simpleChat(input: string): Promise<string> {
     : JSON.stringify(response.content);
 }
 
-export type { ChatRequestParams, ChatResponse };
+export type {
+  ChatRequestParams,
+  ChatResponse,
+  StreamChatResponse,
+  StreamChatErrorResponse,
+};
