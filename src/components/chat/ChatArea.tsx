@@ -5,27 +5,52 @@ import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
 import { WelcomeScreen } from './WelcomeScreen';
 
+import type { ChatApiResponse, ApiMessage } from '@/types';
+
 export function ChatArea() {
-  const { messages, isLoading, addMessage, setLoading } = useChatStore();
+  const { messages, isLoading, addMessage, setLoading, setError } =
+    useChatStore();
 
   const handleSend = async (content: string) => {
     // 添加用户消息
     addMessage({ role: 'user', content });
     setLoading(true);
+    setError(null);
 
     try {
-      // TODO: 调用后端 API
-      // 模拟 AI 回复
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // 构建历史消息（排除刚添加的用户消息）
+      const history: ApiMessage[] = messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
 
-      addMessage({
-        role: 'assistant',
-        content: `这是一条模拟回复。你问的是：「${content}」\n\n后续将接入真实的 AI 服务。`,
+      // 调用后端 API
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: content, history }),
       });
-    } catch {
+
+      const data: ChatApiResponse = await response.json();
+
+      if (data.success) {
+        addMessage({
+          role: 'assistant',
+          content: data.message,
+        });
+      } else {
+        setError(data.error);
+        addMessage({
+          role: 'assistant',
+          content: `抱歉，发生了错误：${data.error}`,
+        });
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : '网络错误';
+      setError(errorMsg);
       addMessage({
         role: 'assistant',
-        content: '抱歉，发生了错误，请稍后再试。',
+        content: '抱歉，网络出现问题，请稍后再试。',
       });
     } finally {
       setLoading(false);
@@ -37,7 +62,7 @@ export function ChatArea() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-white">
+    <div className="flex h-full flex-col overflow-hidden bg-white">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
         <div className="flex items-center gap-2">
