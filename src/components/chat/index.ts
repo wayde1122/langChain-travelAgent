@@ -6,3 +6,5 @@ export { MessageList } from './MessageList';
 export { MessageItem } from './MessageItem';
 export { WelcomeScreen } from './WelcomeScreen';
 export { ChatLayout } from './ChatLayout';
+export { LoadingIndicator } from './LoadingIndicator';
+export { MarkdownRenderer } from './MarkdownRenderer';

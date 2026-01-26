@@ -26,9 +26,19 @@ export interface ChatState {
  * 聊天操作接口
  */
 export interface ChatActions {
+  /** 添加消息 */
   addMessage: (message: Omit<Message, 'id' | 'createdAt'>) => void;
+  /** 更新指定消息内容 */
+  updateMessage: (id: string, content: string) => void;
+  /** 删除指定消息 */
+  removeMessage: (id: string) => void;
+  /** 删除指定消息及其之后的所有消息 */
+  removeMessagesFrom: (id: string) => void;
+  /** 设置加载状态 */
   setLoading: (loading: boolean) => void;
+  /** 设置错误信息 */
   setError: (error: string | null) => void;
+  /** 清空所有消息 */
   clearMessages: () => void;
 }
 

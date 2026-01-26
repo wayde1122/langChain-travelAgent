@@ -31,6 +31,30 @@ export const useChatStore = create<ChatStore>((set) => ({
       ],
     })),
 
+  // 更新指定消息内容
+  updateMessage: (id, content) =>
+    set((state) => ({
+      messages: state.messages.map((msg) =>
+        msg.id === id ? { ...msg, content } : msg
+      ),
+    })),
+
+  // 删除指定消息
+  removeMessage: (id) =>
+    set((state) => ({
+      messages: state.messages.filter((msg) => msg.id !== id),
+    })),
+
+  // 删除指定消息及其之后的所有消息
+  removeMessagesFrom: (id) =>
+    set((state) => {
+      const index = state.messages.findIndex((msg) => msg.id === id);
+      if (index === -1) return state;
+      return {
+        messages: state.messages.slice(0, index),
+      };
+    }),
+
   // 设置加载状态
   setLoading: (loading) => set({ isLoading: loading }),
 
