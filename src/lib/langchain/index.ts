@@ -1,4 +1,20 @@
 // LangChain 模块导出
-export * from './model';
-export * from './prompts';
-export * from './chain';
+
+// 模型配置
+export {
+  createChatModel,
+  getDefaultChatModel,
+  resetDefaultChatModel,
+} from './model';
+export type { ZhipuModelOptions } from './model';
+
+// Prompt 模板
+export {
+  TRAVEL_ASSISTANT_SYSTEM_PROMPT,
+  createChatPromptTemplate,
+  createSimpleChatPromptTemplate,
+} from './prompts';
+
+// 对话链
+export { createChatChain, chat, simpleChat } from './chain';
+export type { ChatRequestParams, ChatResponse } from './chain';
