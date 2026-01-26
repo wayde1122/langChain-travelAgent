@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { chat, chatStream } from '@/lib/langchain';
+import {
+  chat,
+  chatStream,
+  executeAgentStream,
+  executeAgent,
+} from '@/lib/langchain';
 
 import type {
   ChatApiRequest,
   ChatApiResponse,
   Message,
   ApiMessage,
+  AgentEvent,
 } from '@/types';
 
 /**
@@ -24,7 +30,9 @@ function convertApiMessages(apiMessages: ApiMessage[]): Message[] {
 /**
  * 验证请求体
  */
-function validateRequest(body: unknown): body is ChatApiRequest {
+function validateRequest(
+  body: unknown
+): body is ChatApiRequest & { useAgent?: boolean } {
   if (!body || typeof body !== 'object') {
     return false;
   }
@@ -58,27 +66,23 @@ function validateRequest(body: unknown): body is ChatApiRequest {
 
 /**
  * POST /api/chat
- * 聊天 API 端点（支持流式和非流式）
+ * 聊天 API 端点（支持流式和非流式，支持 Agent 模式）
  *
  * 请求体:
  * {
  *   message: string;        // 用户消息
  *   history?: ApiMessage[]; // 历史消息（可选）
- *   stream?: boolean;       // 是否启用流式输出（默认 false）
+ *   stream?: boolean;       // 是否启用流式输出（默认 true）
+ *   useAgent?: boolean;     // 是否使用 Agent 模式（默认 true）
  * }
  *
- * 非流式响应:
- * {
- *   success: boolean;
- *   message?: string;  // AI 回复（成功时）
- *   error?: string;    // 错误信息（失败时）
- * }
- *
- * 流式响应:
- * Server-Sent Events (SSE) 格式
- * - data: {"content": "..."} // 内容块
- * - data: {"done": true}     // 完成标记
- * - data: {"error": "..."}   // 错误信息
+ * Agent 流式响应 (SSE):
+ * - data: {"type": "thinking", "content": "..."}
+ * - data: {"type": "tool_start", "id": "...", "name": "...", "displayName": "...", "input": {...}}
+ * - data: {"type": "tool_end", "id": "...", "name": "...", "output": "..."}
+ * - data: {"type": "content", "content": "..."}
+ * - data: {"type": "error", "message": "..."}
+ * - data: {"done": true}
  */
 export async function POST(
   request: NextRequest
@@ -98,12 +102,21 @@ export async function POST(
       );
     }
 
-    const { message, history = [], stream = false } = body;
+    const { message, history = [], stream = true, useAgent = true } = body;
 
     // 转换历史消息格式
     const convertedHistory = convertApiMessages(history);
 
-    // 流式响应
+    // Agent 模式
+    if (useAgent) {
+      if (stream) {
+        return handleAgentStreamResponse(message.trim(), convertedHistory);
+      } else {
+        return handleAgentResponse(message.trim(), convertedHistory);
+      }
+    }
+
+    // 传统模式（向后兼容）
     if (stream) {
       return handleStreamResponse(message.trim(), convertedHistory);
     }
@@ -157,7 +170,116 @@ export async function POST(
 }
 
 /**
- * 处理流式响应
+ * 处理 Agent 流式响应
+ */
+async function handleAgentStreamResponse(
+  message: string,
+  history: Message[]
+): Promise<Response> {
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      let isClosed = false;
+
+      // 安全写入函数
+      const safeEnqueue = (data: Uint8Array) => {
+        if (!isClosed) {
+          try {
+            controller.enqueue(data);
+          } catch {
+            isClosed = true;
+          }
+        }
+      };
+
+      // 安全关闭函数
+      const safeClose = () => {
+        if (!isClosed) {
+          try {
+            controller.close();
+            isClosed = true;
+          } catch {
+            // 已关闭，忽略
+          }
+        }
+      };
+
+      // 发送 Agent 事件
+      const sendEvent = (event: AgentEvent) => {
+        const data = JSON.stringify(event);
+        safeEnqueue(encoder.encode(`data: ${data}\n\n`));
+      };
+
+      try {
+        const agentStream = executeAgentStream({
+          input: message,
+          history,
+        });
+
+        for await (const event of agentStream) {
+          sendEvent(event);
+        }
+      } catch (error) {
+        // 忽略取消请求导致的错误
+        if (
+          error instanceof Error &&
+          (error.name === 'AbortError' ||
+            error.message.includes('aborted') ||
+            error.message.includes('cancelled'))
+        ) {
+          // 请求被取消，正常关闭
+        } else {
+          console.error('Agent stream error:', error);
+          const errorMessage =
+            error instanceof Error ? error.message : 'Agent 执行错误';
+          sendEvent({ type: 'error', message: errorMessage });
+          sendEvent({ done: true });
+        }
+      } finally {
+        safeClose();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
+  });
+}
+
+/**
+ * 处理 Agent 非流式响应
+ */
+async function handleAgentResponse(
+  message: string,
+  history: Message[]
+): Promise<NextResponse<ChatApiResponse>> {
+  const result = await executeAgent({
+    input: message,
+    history,
+  });
+
+  if (!result.success) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: result.error ?? 'Agent 执行失败',
+      },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    success: true,
+    message: result.content,
+  });
+}
+
+/**
+ * 处理传统流式响应（向后兼容）
  */
 async function handleStreamResponse(
   message: string,
@@ -222,8 +344,8 @@ async function handleStreamResponse(
 
       try {
         for await (const chunk of response.stream) {
-          // 发送内容块
-          const data = JSON.stringify({ content: chunk });
+          // 发送内容块（转换为 Agent 格式以保持前端兼容）
+          const data = JSON.stringify({ type: 'content', content: chunk });
           safeEnqueue(encoder.encode(`data: ${data}\n\n`));
         }
 
@@ -246,7 +368,7 @@ async function handleStreamResponse(
             error instanceof Error ? error.message : '流式传输错误';
           safeEnqueue(
             encoder.encode(
-              `data: ${JSON.stringify({ error: errorMessage })}\n\n`
+              `data: ${JSON.stringify({ type: 'error', message: errorMessage })}\n\n`
             )
           );
         }
@@ -264,3 +386,9 @@ async function handleStreamResponse(
     },
   });
 }
+
+/**
+ * 导出运行时配置
+ * 使用 Node.js 运行时以支持 MCP 子进程
+ */
+export const runtime = 'nodejs';

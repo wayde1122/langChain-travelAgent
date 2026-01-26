@@ -91,3 +91,108 @@ export interface ChatApiErrorResponse {
  * 聊天 API 响应
  */
 export type ChatApiResponse = ChatApiSuccessResponse | ChatApiErrorResponse;
+
+// ============ Agent 事件类型定义 ============
+
+/**
+ * 工具调用步骤状态
+ */
+export type ToolCallStatus = 'pending' | 'running' | 'success' | 'error';
+
+/**
+ * 工具调用步骤
+ */
+export interface ToolCallStep {
+  /** 步骤 ID */
+  id: string;
+  /** 工具名称 */
+  name: string;
+  /** 工具显示名称 */
+  displayName: string;
+  /** 调用参数 */
+  input: Record<string, unknown>;
+  /** 返回结果 */
+  output?: string;
+  /** 状态 */
+  status: ToolCallStatus;
+  /** 错误信息 */
+  error?: string;
+  /** 开始时间 */
+  startTime: Date;
+  /** 结束时间 */
+  endTime?: Date;
+}
+
+/**
+ * Agent 思考事件
+ */
+export interface AgentThinkingEvent {
+  type: 'thinking';
+  content: string;
+}
+
+/**
+ * 工具开始调用事件
+ */
+export interface AgentToolStartEvent {
+  type: 'tool_start';
+  id: string;
+  name: string;
+  displayName: string;
+  input: Record<string, unknown>;
+}
+
+/**
+ * 工具调用结束事件
+ */
+export interface AgentToolEndEvent {
+  type: 'tool_end';
+  id: string;
+  name: string;
+  output: string;
+  error?: string;
+}
+
+/**
+ * 内容输出事件
+ */
+export interface AgentContentEvent {
+  type: 'content';
+  content: string;
+}
+
+/**
+ * 错误事件
+ */
+export interface AgentErrorEvent {
+  type: 'error';
+  message: string;
+}
+
+/**
+ * 完成事件
+ */
+export interface AgentDoneEvent {
+  done: true;
+}
+
+/**
+ * Agent 事件联合类型
+ */
+export type AgentEvent =
+  | AgentThinkingEvent
+  | AgentToolStartEvent
+  | AgentToolEndEvent
+  | AgentContentEvent
+  | AgentErrorEvent
+  | AgentDoneEvent;
+
+/**
+ * 带工具调用步骤的消息
+ */
+export interface MessageWithToolCalls extends Message {
+  /** 工具调用步骤 */
+  toolCalls?: ToolCallStep[];
+  /** 是否正在流式传输 */
+  isStreaming?: boolean;
+}

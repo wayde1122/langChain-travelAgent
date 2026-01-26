@@ -8,3 +8,4 @@ export { WelcomeScreen } from './WelcomeScreen';
 export { ChatLayout } from './ChatLayout';
 export { LoadingIndicator } from './LoadingIndicator';
 export { MarkdownRenderer } from './MarkdownRenderer';
+export { ToolCallSteps } from './ToolCallSteps';

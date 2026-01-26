@@ -159,38 +159,45 @@
 
 ### 任务清单
 
-- [ ] **3.1 理解 Function Calling**
-  - 学习 LLM 的 Function Calling 原理
-  - 了解 LangChain Tools 的定义方式
-  - 理解 Agent 的决策流程
+- [✅] **3.1 理解 Function Calling**
+  - LangChain Tools 的定义方式（`@langchain/core/tools`）
+  - ReAct Agent 的决策流程（Thought → Action → Observation）
+  - LangGraph 的 `createReactAgent` 实现
 
-- [ ] **3.2 实现第一个工具**
-  - 选择一个简单的 API（如天气查询）
-  - 定义 Tool Schema
-  - 接入 LangChain Agent
+- [✅] **3.2 实现本地工具**
+  - 当前日期工具（`get_current_date`）
+  - 工具显示名称映射
 
-- [ ] **3.3 扩展更多工具**
-  - 汇率换算
-  - 景点搜索
-  - 其他旅行相关 API
+- [✅] **3.3 集成 MCP 服务**
+  - 使用 `@langchain/mcp-adapters` 的 `MultiServerMCPClient`
+  - 高德地图 MCP（天气查询、POI 搜索）
+  - 飞常准 MCP（航班查询）
+  - 12306 MCP（暂未接入，待 ModelScope 服务调试）
 
-- [ ] **3.4 探索 MCP（可选）**
-  - 了解 MCP 协议
-  - 尝试用 MCP 替代 LangChain Tools
-  - 对比两种方案的优劣
+- [✅] **3.4 前端工具调用展示**
+  - `ToolCallSteps` 组件展示工具调用步骤
+  - 可折叠的工具调用详情
+  - Agent 事件流实时展示
 
 ### 验收标准
 
-- [ ] 问"东京今天天气"能返回真实数据
-- [ ] 问"100 美元等于多少日元"能实时计算
-- [ ] AI 能自动判断何时需要调用工具
+- [✅] 问"今天是几号"能返回正确日期
+- [✅] 问"东京今天天气"能返回真实数据
+- [✅] 问"北京到上海的航班"能返回航班信息
+- [✅] AI 能自动判断何时需要调用工具
+- [✅] 工具调用步骤正确展示
 
 ### 学习要点
 
 - Function Calling / Tool Use 原理
-- Agent 决策循环
-- 外部 API 集成
-- MCP 协议（进阶）
+- ReAct Agent 决策循环
+- LangChain MCP Adapters
+- Agent 事件流（streamEvents）
+- 前端状态管理（工具调用状态）
+
+### 相关文档
+
+- OpenSpec Change: `openspec/changes/add-tool-calling/`
 
 ---
 
@@ -260,4 +267,4 @@
 
 ---
 
-_最后更新：2026-01-26（阶段 2 完成）_
+_最后更新：2026-01-26（阶段 3 完成）_
