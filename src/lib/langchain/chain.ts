@@ -18,7 +18,7 @@ import {
   TRAVEL_ASSISTANT_SYSTEM_PROMPT,
 } from './prompts';
 
-import type { ZhipuModelOptions } from './model';
+import type { LLMModelOptions } from './model';
 
 /**
  * 聊天请求参数
@@ -29,7 +29,7 @@ interface ChatRequestParams {
   /** 历史消息 */
   history?: Message[];
   /** 模型配置（可选） */
-  modelOptions?: ZhipuModelOptions;
+  modelOptions?: LLMModelOptions;
 }
 
 /**
@@ -65,7 +65,7 @@ function convertToLangChainMessages(messages: Message[]): BaseMessage[] {
 /**
  * 创建对话链
  */
-export function createChatChain(modelOptions?: ZhipuModelOptions) {
+export function createChatChain(modelOptions?: LLMModelOptions) {
   const model = modelOptions
     ? createChatModel(modelOptions)
     : getDefaultChatModel();

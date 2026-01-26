@@ -6,7 +6,7 @@ export {
   getDefaultChatModel,
   resetDefaultChatModel,
 } from './model';
-export type { ZhipuModelOptions } from './model';
+export type { LLMModelOptions } from './model';
 
 // Prompt 模板
 export {
