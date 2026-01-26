@@ -6,12 +6,20 @@ import { User, RefreshCw, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { exportToPdf } from '@/lib/utils/export-pdf';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { ToolCallSteps } from './ToolCallSteps';
 
-import type { Message } from '@/types';
+import type { ToolCallStep } from '@/types';
 
 interface MessageItemProps {
   /** 消息对象 */
-  message: Message;
+  message: {
+    id: string;
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    createdAt: Date;
+    toolCalls?: ToolCallStep[];
+    isStreaming?: boolean;
+  };
   /** 重新生成回调 */
   onRegenerate?: (messageId: string) => void;
   /** 是否显示操作按钮 */
@@ -22,7 +30,7 @@ interface MessageItemProps {
 
 /**
  * 消息项组件
- * 显示单条消息，AI 消息支持 Markdown 渲染、重新生成和导出 PDF
+ * 显示单条消息，AI 消息支持 Markdown 渲染、工具调用展示、重新生成和导出 PDF
  */
 export function MessageItem({
   message,
@@ -32,6 +40,7 @@ export function MessageItem({
 }: MessageItemProps) {
   const isUser = message.role === 'user';
   const contentRef = useRef<HTMLDivElement>(null);
+  const hasToolCalls = message.toolCalls && message.toolCalls.length > 0;
 
   /** 处理导出 PDF */
   const handleExportPdf = () => {
@@ -82,38 +91,56 @@ export function MessageItem({
                 {message.content}
               </div>
             ) : (
-              <MarkdownRenderer ref={contentRef} content={message.content} />
+              <>
+                {/* 工具调用步骤 */}
+                {hasToolCalls && (
+                  <ToolCallSteps steps={message.toolCalls!} className="mb-3" />
+                )}
+
+                {/* 消息内容 */}
+                {message.content ? (
+                  <MarkdownRenderer
+                    ref={contentRef}
+                    content={message.content}
+                  />
+                ) : message.isStreaming ? (
+                  <span className="text-muted-foreground">正在思考...</span>
+                ) : null}
+              </>
             )}
           </div>
 
           {/* AI 消息操作按钮 */}
-          {!isUser && showActions && (
-            <div className="mt-2 flex gap-3 opacity-0 transition-opacity group-hover:opacity-100">
-              <button
-                onClick={handleRegenerate}
-                disabled={isRegenerating}
-                className={cn(
-                  'flex cursor-pointer items-center gap-1 text-xs text-neutral-400 transition-colors hover:text-neutral-600',
-                  isRegenerating && 'cursor-not-allowed opacity-50'
-                )}
-              >
-                <RefreshCw
+          {!isUser &&
+            showActions &&
+            !message.isStreaming &&
+            message.content && (
+              <div className="mt-2 flex gap-3 opacity-0 transition-opacity group-hover:opacity-100">
+                <button
+                  onClick={handleRegenerate}
+                  disabled={isRegenerating}
                   className={cn(
-                    'h-3.5 w-3.5',
-                    isRegenerating && 'animate-spin'
+                    'flex cursor-pointer items-center gap-1 text-xs text-neutral-400 transition-colors hover:text-neutral-600',
+                    isRegenerating && 'cursor-not-allowed opacity-50'
                   )}
-                />
-                <span>{isRegenerating ? '生成中...' : '重新生成'}</span>
-              </button>
-              <button
-                onClick={handleExportPdf}
-                className="flex cursor-pointer items-center gap-1 text-xs text-neutral-400 transition-colors hover:text-neutral-600"
-              >
-                <Download className="h-3.5 w-3.5" />
-                <span>导出 PDF</span>
-              </button>
-            </div>
-          )}
+                >
+                  <RefreshCw
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      isRegenerating && 'animate-spin'
+                    )}
+                  />
+                  <span>{isRegenerating ? '生成中...' : '重新生成'}</span>
+                </button>
+                <button
+                  onClick={handleExportPdf}
+                  className="flex cursor-pointer items-center gap-1 text-xs text-neutral-400 transition-colors hover:text-neutral-600"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>导出 PDF</span>
+                </button>
+              </div>
+            )}
         </div>
       </div>
     </div>

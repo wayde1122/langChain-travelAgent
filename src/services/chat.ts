@@ -6,20 +6,29 @@
 import { request, createCancellableRequest } from '@/lib/utils/request';
 
 import type { ApiResponse } from '@/lib/utils/request';
-import type { ApiMessage, ChatApiResponse } from '@/types';
+import type { ApiMessage, ChatApiResponse, AgentEvent } from '@/types';
 
 /** AI 聊天请求超时时间（毫秒）- 2分钟 */
 const CHAT_TIMEOUT = 120000;
 
-/** SSE 数据块类型 */
-interface SSEChunk {
-  content?: string;
-  done?: boolean;
-  error?: string;
-}
-
-/** 流式响应回调 */
-interface StreamCallbacks {
+/** Agent 流式响应回调 */
+interface AgentStreamCallbacks {
+  /** 收到思考事件 */
+  onThinking?: (content: string) => void;
+  /** 工具开始调用 */
+  onToolStart?: (
+    id: string,
+    name: string,
+    displayName: string,
+    input: Record<string, unknown>
+  ) => void;
+  /** 工具调用结束 */
+  onToolEnd?: (
+    id: string,
+    name: string,
+    output: string,
+    error?: string
+  ) => void;
   /** 收到内容块时调用 */
   onContent: (content: string) => void;
   /** 流式传输完成时调用 */
@@ -34,30 +43,32 @@ export const chatService = {
    * 发送消息（非流式）
    * @param message - 用户消息内容
    * @param history - 历史消息记录
+   * @param useAgent - 是否使用 Agent 模式
    * @returns Promise<ApiResponse<ChatApiResponse>>
    */
   sendMessage: async (
     message: string,
-    history: ApiMessage[] = []
+    history: ApiMessage[] = [],
+    useAgent = true
   ): Promise<ApiResponse<ChatApiResponse>> => {
     return request<ChatApiResponse>('/api/chat', {
       method: 'POST',
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({ message, history, stream: false, useAgent }),
       timeout: CHAT_TIMEOUT,
     });
   },
 
   /**
-   * 发送流式消息
+   * 发送 Agent 流式消息
    * @param message - 用户消息内容
    * @param history - 历史消息记录
-   * @param callbacks - 流式响应回调
+   * @param callbacks - Agent 流式响应回调
    * @param signal - AbortSignal 用于取消请求
    */
-  sendStreamMessage: async (
+  sendAgentStreamMessage: async (
     message: string,
     history: ApiMessage[] = [],
-    callbacks: StreamCallbacks,
+    callbacks: AgentStreamCallbacks,
     signal?: AbortSignal
   ): Promise<void> => {
     try {
@@ -66,7 +77,12 @@ export const chatService = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message, history, stream: true }),
+        body: JSON.stringify({
+          message,
+          history,
+          stream: true,
+          useAgent: true,
+        }),
         signal,
       });
 
@@ -104,19 +120,11 @@ export const chatService = {
 
           const jsonStr = line.slice(6); // 去掉 "data: " 前缀
           try {
-            const data = JSON.parse(jsonStr) as SSEChunk;
+            const event = JSON.parse(jsonStr) as AgentEvent;
+            handleAgentEvent(event, callbacks);
 
-            if (data.error) {
-              callbacks.onError(data.error);
-              return;
-            }
-
-            if (data.content) {
-              callbacks.onContent(data.content);
-            }
-
-            if (data.done) {
-              callbacks.onDone();
+            // 如果是完成或错误事件，直接返回
+            if ('done' in event || event.type === 'error') {
               return;
             }
           } catch {
@@ -129,10 +137,8 @@ export const chatService = {
       if (buffer.startsWith('data: ')) {
         const jsonStr = buffer.slice(6);
         try {
-          const data = JSON.parse(jsonStr) as SSEChunk;
-          if (data.done) {
-            callbacks.onDone();
-          }
+          const event = JSON.parse(jsonStr) as AgentEvent;
+          handleAgentEvent(event, callbacks);
         } catch {
           // 忽略
         }
@@ -148,18 +154,18 @@ export const chatService = {
   },
 
   /**
-   * 创建可取消的流式发送消息请求
-   * @returns [sendStreamMessage 函数, cancel 函数]
+   * 创建可取消的 Agent 流式发送消息请求
+   * @returns [sendAgentStreamMessage 函数, cancel 函数]
    */
-  createCancellableStreamSend: () => {
+  createCancellableAgentStreamSend: () => {
     const controller = new AbortController();
 
-    const sendStreamMessage = (
+    const sendAgentStreamMessage = (
       message: string,
       history: ApiMessage[],
-      callbacks: StreamCallbacks
+      callbacks: AgentStreamCallbacks
     ) => {
-      return chatService.sendStreamMessage(
+      return chatService.sendAgentStreamMessage(
         message,
         history,
         callbacks,
@@ -169,7 +175,7 @@ export const chatService = {
 
     const cancel = () => controller.abort();
 
-    return [sendStreamMessage, cancel] as const;
+    return [sendAgentStreamMessage, cancel] as const;
   },
 
   /**
@@ -182,11 +188,12 @@ export const chatService = {
 
     const sendMessage = async (
       message: string,
-      history: ApiMessage[] = []
+      history: ApiMessage[] = [],
+      useAgent = true
     ): Promise<ApiResponse<ChatApiResponse>> => {
       return doRequest<ChatApiResponse>('/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ message, history }),
+        body: JSON.stringify({ message, history, stream: false, useAgent }),
         timeout: CHAT_TIMEOUT,
       });
     };
@@ -194,3 +201,45 @@ export const chatService = {
     return [sendMessage, cancel] as const;
   },
 };
+
+/**
+ * 处理 Agent 事件
+ */
+function handleAgentEvent(
+  event: AgentEvent,
+  callbacks: AgentStreamCallbacks
+): void {
+  if ('done' in event) {
+    callbacks.onDone();
+    return;
+  }
+
+  switch (event.type) {
+    case 'thinking':
+      callbacks.onThinking?.(event.content);
+      break;
+
+    case 'tool_start':
+      callbacks.onToolStart?.(
+        event.id,
+        event.name,
+        event.displayName,
+        event.input
+      );
+      break;
+
+    case 'tool_end':
+      callbacks.onToolEnd?.(event.id, event.name, event.output, event.error);
+      break;
+
+    case 'content':
+      callbacks.onContent(event.content);
+      break;
+
+    case 'error':
+      callbacks.onError(event.message);
+      break;
+  }
+}
+
+export type { AgentStreamCallbacks };

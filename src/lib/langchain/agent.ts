@@ -1,0 +1,254 @@
+/**
+ * ReAct Agent 配置
+ * 使用 LangGraph 创建具有工具调用能力的 Agent
+ */
+import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
+import {
+  ChatPromptTemplate,
+  MessagesPlaceholder,
+} from '@langchain/core/prompts';
+import { createReactAgent } from '@langchain/langgraph/prebuilt';
+
+import type { StructuredToolInterface } from '@langchain/core/tools';
+import type { Message, AgentEvent } from '@/types';
+
+import { createChatModel } from './model';
+import { TRAVEL_AGENT_SYSTEM_PROMPT } from './prompts';
+import { localTools, TOOL_DISPLAY_NAMES } from './tools';
+import {
+  initializeMCPClient,
+  getMCPTools,
+  MCP_TOOL_DISPLAY_NAMES,
+} from './mcp-client';
+
+/**
+ * 获取工具的显示名称
+ */
+export function getToolDisplayName(toolName: string): string {
+  return (
+    TOOL_DISPLAY_NAMES[toolName] ?? MCP_TOOL_DISPLAY_NAMES[toolName] ?? toolName
+  );
+}
+
+/**
+ * 将应用消息转换为 LangChain 消息格式
+ */
+function convertToLangChainMessages(messages: Message[]): BaseMessage[] {
+  return messages.map((msg) => {
+    switch (msg.role) {
+      case 'user':
+        return new HumanMessage(msg.content);
+      case 'assistant':
+        return new AIMessage(msg.content);
+      default:
+        return new HumanMessage(msg.content);
+    }
+  });
+}
+
+/**
+ * 创建 Agent 提示模板
+ */
+function createAgentPrompt(): ChatPromptTemplate {
+  return ChatPromptTemplate.fromMessages([
+    ['system', TRAVEL_AGENT_SYSTEM_PROMPT],
+    new MessagesPlaceholder('messages'),
+  ]);
+}
+
+/**
+ * 获取所有可用工具
+ */
+async function getAllTools(): Promise<StructuredToolInterface[]> {
+  // 初始化 MCP 客户端
+  await initializeMCPClient();
+
+  // 获取 MCP 工具
+  const mcpTools = getMCPTools();
+
+  // 合并本地工具和 MCP 工具
+  return [...localTools, ...mcpTools];
+}
+
+/**
+ * 创建 ReAct Agent
+ */
+export async function createTravelAgent() {
+  const model = createChatModel();
+  const tools = await getAllTools();
+
+  console.log(
+    '创建 Agent，可用工具:',
+    tools.map((t) => t.name)
+  );
+
+  // 使用 LangGraph 创建 ReAct Agent
+  const agent = createReactAgent({
+    llm: model,
+    tools,
+    prompt: createAgentPrompt(),
+  });
+
+  return agent;
+}
+
+/**
+ * Agent 执行参数
+ */
+interface AgentExecuteParams {
+  input: string;
+  history?: Message[];
+}
+
+/**
+ * 生成唯一 ID
+ */
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
+ * 执行 Agent 并返回流式事件
+ */
+export async function* executeAgentStream(
+  params: AgentExecuteParams
+): AsyncGenerator<AgentEvent> {
+  const { input, history = [] } = params;
+
+  try {
+    const agent = await createTravelAgent();
+    const historyMessages = convertToLangChainMessages(history);
+
+    // 构建输入消息
+    const messages = [...historyMessages, new HumanMessage(input)];
+
+    // 使用 streamEvents 获取详细的执行事件
+    const eventStream = agent.streamEvents({ messages }, { version: 'v2' });
+
+    let currentToolCallId: string | null = null;
+    let finalContent = '';
+
+    console.log('\n========== Agent 执行开始 ==========');
+    console.log('📝 用户输入:', input);
+    console.log('📚 历史消息数:', history.length);
+
+    for await (const event of eventStream) {
+      const eventType = event.event;
+
+      // 处理不同类型的事件
+      switch (eventType) {
+        case 'on_chat_model_start':
+          // 模型开始思考
+          console.log('\n🤔 [LLM] 开始思考...');
+          yield { type: 'thinking', content: '正在思考...' };
+          break;
+
+        case 'on_tool_start': {
+          // 工具开始执行
+          currentToolCallId = generateId();
+          const toolInput = event.data?.input ?? {};
+          console.log('\n🔧 [Tool Start]', event.name);
+          console.log('   📥 输入:', JSON.stringify(toolInput, null, 2));
+          yield {
+            type: 'tool_start',
+            id: currentToolCallId,
+            name: event.name,
+            displayName: getToolDisplayName(event.name),
+            input: toolInput,
+          };
+          break;
+        }
+
+        case 'on_tool_end': {
+          // 工具执行完成
+          if (currentToolCallId) {
+            const toolOutput =
+              typeof event.data?.output === 'string'
+                ? event.data.output
+                : JSON.stringify(event.data?.output ?? '');
+            console.log('✅ [Tool End]', event.name);
+            console.log(
+              '   📤 输出:',
+              toolOutput.slice(0, 200) + (toolOutput.length > 200 ? '...' : '')
+            );
+            yield {
+              type: 'tool_end',
+              id: currentToolCallId,
+              name: event.name,
+              output: toolOutput,
+            };
+            currentToolCallId = null;
+          }
+          break;
+        }
+
+        case 'on_chat_model_stream': {
+          // 模型流式输出
+          const chunk = event.data?.chunk;
+          if (chunk?.content) {
+            const content =
+              typeof chunk.content === 'string'
+                ? chunk.content
+                : JSON.stringify(chunk.content);
+            if (content) {
+              finalContent += content;
+              yield { type: 'content', content };
+            }
+          }
+          break;
+        }
+
+        case 'on_chat_model_end':
+          // 模型输出完成（可能有工具调用）
+          console.log('💭 [LLM] 思考完成');
+          break;
+      }
+    }
+
+    console.log('\n📊 最终回复长度:', finalContent.length, '字符');
+    console.log('========== Agent 执行结束 ==========\n');
+
+    // 完成
+    yield { done: true };
+  } catch (error) {
+    console.error('Agent 执行错误:', error);
+    yield {
+      type: 'error',
+      message: error instanceof Error ? error.message : '执行失败',
+    };
+    yield { done: true };
+  }
+}
+
+/**
+ * 执行 Agent（非流式，返回最终结果）
+ */
+export async function executeAgent(
+  params: AgentExecuteParams
+): Promise<{ content: string; success: boolean; error?: string }> {
+  const { input, history = [] } = params;
+
+  try {
+    const agent = await createTravelAgent();
+    const historyMessages = convertToLangChainMessages(history);
+    const messages = [...historyMessages, new HumanMessage(input)];
+
+    const result = await agent.invoke({ messages });
+
+    // 提取最后一条 AI 消息的内容
+    const lastMessage = result.messages[result.messages.length - 1];
+    const content =
+      typeof lastMessage.content === 'string'
+        ? lastMessage.content
+        : JSON.stringify(lastMessage.content);
+
+    return { content, success: true };
+  } catch (error) {
+    console.error('Agent 执行错误:', error);
+    return {
+      content: '',
+      success: false,
+      error: error instanceof Error ? error.message : '执行失败',
+    };
+  }
+}

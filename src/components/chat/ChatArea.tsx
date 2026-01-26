@@ -7,12 +7,12 @@ import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
 import { WelcomeScreen } from './WelcomeScreen';
 
-import type { ApiMessage } from '@/types';
+import type { ApiMessage, ToolCallStep } from '@/types';
 
 /**
  * 聊天区域组件
  * 包含消息列表、输入框和欢迎屏幕
- * 支持流式输出
+ * 支持 Agent 流式输出和工具调用展示
  */
 export function ChatArea() {
   const {
@@ -20,28 +20,30 @@ export function ChatArea() {
     isLoading,
     addMessage,
     updateMessage,
+    appendMessageContent,
     removeMessagesFrom,
     setLoading,
+    setStreaming,
+    setMessageStreaming,
     setError,
+    addToolCall,
+    updateToolCall,
   } = useChatStore();
 
   // 正在重新生成的消息 ID
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
 
   // 是否正在流式传输
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [isStreamingLocal, setIsStreamingLocal] = useState(false);
 
   // 当前流式消息的 ID
   const streamingMessageIdRef = useRef<string | null>(null);
-
-  // 当前累积的内容
-  const accumulatedContentRef = useRef<string>('');
 
   // 取消函数引用
   const cancelRef = useRef<(() => void) | null>(null);
 
   /**
-   * 发送消息（流式）
+   * 发送消息（Agent 流式）
    * @param content - 消息内容
    * @param historyMessages - 可选的历史消息（用于重新生成时指定历史）
    */
@@ -56,7 +58,6 @@ export function ChatArea() {
       setError(null);
 
       // 重置流式状态
-      accumulatedContentRef.current = '';
       streamingMessageIdRef.current = null;
 
       try {
@@ -69,38 +70,65 @@ export function ChatArea() {
           }));
 
         // 先添加一个空的 AI 消息占位
-        addMessage({ role: 'assistant', content: '' });
-        setIsStreaming(true);
+        const messageId = addMessage({
+          role: 'assistant',
+          content: '',
+          toolCalls: [],
+          isStreaming: true,
+        });
+        streamingMessageIdRef.current = messageId;
+        setIsStreamingLocal(true);
+        setStreaming(true);
 
-        // 获取刚添加的消息 ID（最后一条消息）
-        // 注意：这里需要在下一个 tick 获取，因为 addMessage 是异步的
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const currentMessages = useChatStore.getState().messages;
-        const assistantMessage = currentMessages[currentMessages.length - 1];
-        streamingMessageIdRef.current = assistantMessage.id;
-
-        // 创建可取消的流式请求
-        const [sendStreamMessage, cancel] =
-          chatService.createCancellableStreamSend();
+        // 创建可取消的 Agent 流式请求
+        const [sendAgentStreamMessage, cancel] =
+          chatService.createCancellableAgentStreamSend();
         cancelRef.current = cancel;
 
-        // 发送流式请求
-        await sendStreamMessage(content, history, {
-          onContent: (chunk) => {
-            // 累积内容并更新消息
-            accumulatedContentRef.current += chunk;
+        // 发送 Agent 流式请求
+        await sendAgentStreamMessage(content, history, {
+          onThinking: () => {
+            // 可以在这里更新思考状态
+          },
+          onToolStart: (id, name, displayName, input) => {
+            // 添加工具调用步骤
             if (streamingMessageIdRef.current) {
-              updateMessage(
-                streamingMessageIdRef.current,
-                accumulatedContentRef.current
-              );
+              const toolCall: ToolCallStep = {
+                id,
+                name,
+                displayName,
+                input,
+                status: 'running',
+                startTime: new Date(),
+              };
+              addToolCall(streamingMessageIdRef.current, toolCall);
+            }
+          },
+          onToolEnd: (id, name, output, error) => {
+            // 更新工具调用结果
+            if (streamingMessageIdRef.current) {
+              updateToolCall(streamingMessageIdRef.current, id, {
+                output,
+                error,
+                status: error ? 'error' : 'success',
+                endTime: new Date(),
+              });
+            }
+          },
+          onContent: (chunk) => {
+            // 追加内容
+            if (streamingMessageIdRef.current) {
+              appendMessageContent(streamingMessageIdRef.current, chunk);
             }
           },
           onDone: () => {
             // 流式传输完成
+            if (streamingMessageIdRef.current) {
+              setMessageStreaming(streamingMessageIdRef.current, false);
+            }
             setLoading(false);
-            setIsStreaming(false);
+            setIsStreamingLocal(false);
+            setStreaming(false);
             setRegeneratingId(null);
             streamingMessageIdRef.current = null;
             cancelRef.current = null;
@@ -109,13 +137,21 @@ export function ChatArea() {
             // 处理错误
             setError(error);
             if (streamingMessageIdRef.current) {
-              updateMessage(
-                streamingMessageIdRef.current,
-                accumulatedContentRef.current || `抱歉，发生了错误：${error}`
+              const currentMessages = useChatStore.getState().messages;
+              const msg = currentMessages.find(
+                (m) => m.id === streamingMessageIdRef.current
               );
+              if (msg && !msg.content) {
+                updateMessage(
+                  streamingMessageIdRef.current,
+                  `抱歉，发生了错误：${error}`
+                );
+              }
+              setMessageStreaming(streamingMessageIdRef.current, false);
             }
             setLoading(false);
-            setIsStreaming(false);
+            setIsStreamingLocal(false);
+            setStreaming(false);
             setRegeneratingId(null);
             streamingMessageIdRef.current = null;
             cancelRef.current = null;
@@ -129,15 +165,28 @@ export function ChatArea() {
             streamingMessageIdRef.current,
             '抱歉，网络出现问题，请稍后再试。'
           );
+          setMessageStreaming(streamingMessageIdRef.current, false);
         }
         setLoading(false);
-        setIsStreaming(false);
+        setIsStreamingLocal(false);
+        setStreaming(false);
         setRegeneratingId(null);
         streamingMessageIdRef.current = null;
         cancelRef.current = null;
       }
     },
-    [messages, addMessage, updateMessage, setLoading, setError]
+    [
+      messages,
+      addMessage,
+      updateMessage,
+      appendMessageContent,
+      setLoading,
+      setStreaming,
+      setMessageStreaming,
+      setError,
+      addToolCall,
+      updateToolCall,
+    ]
   );
 
   /**
@@ -196,10 +245,14 @@ export function ChatArea() {
       cancelRef.current();
       cancelRef.current = null;
     }
+    if (streamingMessageIdRef.current) {
+      setMessageStreaming(streamingMessageIdRef.current, false);
+    }
     setLoading(false);
-    setIsStreaming(false);
+    setIsStreamingLocal(false);
+    setStreaming(false);
     streamingMessageIdRef.current = null;
-  }, [setLoading]);
+  }, [setLoading, setStreaming, setMessageStreaming]);
 
   /** 处理建议点击 */
   const handleSuggestionClick = useCallback(
@@ -215,6 +268,7 @@ export function ChatArea() {
       <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="font-medium text-neutral-900">Travel Assistant</span>
+          <span className="text-xs text-muted-foreground">(Agent Mode)</span>
         </div>
       </div>
 
@@ -224,7 +278,7 @@ export function ChatArea() {
       ) : (
         <MessageList
           messages={messages}
-          isLoading={isLoading && !isStreaming}
+          isLoading={isLoading && !isStreamingLocal}
           regeneratingId={regeneratingId}
           onRegenerate={handleRegenerate}
         />
@@ -235,7 +289,7 @@ export function ChatArea() {
         onSend={handleSend}
         onStop={handleStop}
         disabled={isLoading}
-        isStreaming={isStreaming}
+        isStreaming={isStreamingLocal}
       />
     </div>
   );
