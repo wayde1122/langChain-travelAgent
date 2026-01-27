@@ -17,26 +17,23 @@
 │  │  └───────────┘  └───────────┘  └───────────────────┘   │   │
 │  └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ HTTP POST /api/chat
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       Next.js API Routes                         │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                   /api/chat/route.ts                     │   │
-│  │  ┌───────────┐  ┌───────────┐  ┌───────────────────┐   │   │
-│  │  │ 请求验证   │→ │ Prompt    │→ │ LangChain 调用    │   │   │
-│  │  │           │  │ 构造      │  │                   │   │   │
-│  │  └───────────┘  └───────────┘  └───────────────────┘   │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ LangChain.js
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        智谱 AI API                               │
-│                     (GLM-4 / GLM-4-Flash)                        │
-└─────────────────────────────────────────────────────────────────┘
+         │                              │
+         │ Supabase Client              │ HTTP POST /api/chat
+         ▼                              ▼
+┌─────────────────────┐   ┌─────────────────────────────────────┐
+│   Supabase          │   │       Next.js API Routes             │
+│  ┌───────────────┐  │   │  ┌─────────────────────────────┐   │
+│  │ Auth          │  │   │  │     /api/chat/route.ts      │   │
+│  │ (用户认证)    │  │   │  │  Prompt → LangChain → AI    │   │
+│  ├───────────────┤  │   │  └─────────────────────────────┘   │
+│  │ PostgreSQL    │  │   └─────────────────────────────────────┘
+│  │ (会话/消息)   │  │                     │
+│  │ + RLS 数据隔离│  │                     │ LangChain.js
+│  └───────────────┘  │                     ▼
+└─────────────────────┘   ┌─────────────────────────────────────┐
+                          │            智谱 AI API               │
+                          │         (GLM-4 / GLM-4-Flash)        │
+                          └─────────────────────────────────────┘
 ```
 
 ---
@@ -46,29 +43,45 @@
 ```
 travel-assistant/
 ├── app/                        # Next.js App Router
-│   ├── layout.tsx              # 根布局
+│   ├── layout.tsx              # 根布局（含 AuthProvider）
 │   ├── page.tsx                # 首页（聊天主界面）
 │   ├── globals.css             # 全局样式
+│   ├── auth/                   # 认证页面（阶段 4）
+│   │   ├── login/page.tsx      # 登录页
+│   │   └── signup/page.tsx     # 注册页
 │   └── api/                    # API 路由
 │       └── chat/
 │           └── route.ts        # 聊天 API 端点
+├── middleware.ts               # Auth 中间件（阶段 4）
+├── supabase/                   # 数据库迁移（阶段 4）
+│   └── migrations/             # SQL 迁移脚本
 │
 ├── components/                 # React 组件
 │   ├── ui/                     # shadcn/ui 组件（自动生成）
-│   ├── ChatInterface.tsx       # 聊天界面容器
-│   ├── MessageList.tsx         # 消息列表
-│   ├── MessageItem.tsx         # 单条消息
-│   └── ChatInput.tsx           # 输入框组件
+│   ├── auth/                   # 认证组件（阶段 4）
+│   │   ├── AuthProvider.tsx    # 认证上下文
+│   │   └── UserMenu.tsx        # 用户菜单
+│   ├── chat/                   # 聊天组件
+│   │   ├── ChatLayout.tsx      # 聊天布局
+│   │   ├── ChatArea.tsx        # 聊天区域
+│   │   ├── Sidebar.tsx         # 侧边栏（含会话列表）
+│   │   ├── MessageList.tsx     # 消息列表
+│   │   └── ChatInput.tsx       # 输入框组件
 │
 ├── lib/                        # 核心逻辑
 │   ├── langchain/              # LangChain 相关
 │   │   ├── model.ts            # 模型配置
 │   │   ├── prompts.ts          # 提示词模板
 │   │   └── chain.ts            # 链式调用（阶段 2+）
+│   ├── supabase/               # Supabase 配置（阶段 4）
+│   │   ├── client.ts           # 浏览器端客户端
+│   │   ├── server.ts           # 服务端客户端
+│   │   └── middleware.ts       # Auth 中间件
 │   └── utils.ts                # 工具函数
 │
 ├── store/                      # Zustand 状态管理
 │   ├── chat-store.ts           # 聊天状态 Store
+│   ├── session-store.ts        # 会话状态 Store（阶段 4）
 │   └── index.ts                # 统一导出
 │
 ├── types/                      # TypeScript 类型定义
@@ -139,40 +152,43 @@ page.tsx (首页)
 
 **组件职责：**
 
-| 组件 | 职责 | 状态管理 |
-|------|------|----------|
+| 组件            | 职责                       | 状态管理            |
+| --------------- | -------------------------- | ------------------- |
 | `ChatInterface` | 聊天界面容器，管理消息状态 | messages, isLoading |
-| `MessageList` | 展示消息列表，自动滚动 | 无（接收 props） |
-| `MessageItem` | 单条消息渲染 | 无（纯展示） |
-| `ChatInput` | 用户输入，发送消息 | input value |
+| `MessageList`   | 展示消息列表，自动滚动     | 无（接收 props）    |
+| `MessageItem`   | 单条消息渲染               | 无（纯展示）        |
+| `ChatInput`     | 用户输入，发送消息         | input value         |
 
 ### 2. API 层设计
 
 **端点：** `POST /api/chat`
 
 **请求体：**
+
 ```typescript
 interface ChatRequest {
-  messages: Message[];  // 对话历史
+  messages: Message[]; // 对话历史
 }
 
 interface Message {
-  role: "user" | "assistant" | "system";
+  role: 'user' | 'assistant' | 'system';
   content: string;
 }
 ```
 
 **响应体（阶段 1）：**
+
 ```typescript
 interface ChatResponse {
   message: {
-    role: "assistant";
+    role: 'assistant';
     content: string;
   };
 }
 ```
 
 **响应体（阶段 2 - 流式）：**
+
 ```
 Server-Sent Events (SSE)
 data: {"content": "北"}
@@ -185,18 +201,21 @@ data: [DONE]
 ### 3. LangChain 模块
 
 **model.ts - 模型配置**
+
 ```
 职责：初始化智谱 AI 模型
 导出：配置好的 ChatZhipuAI 实例
 ```
 
 **prompts.ts - 提示词管理**
+
 ```
 职责：定义和管理 System Prompt
 导出：旅行助手的角色设定
 ```
 
 **chain.ts - 链式调用（后续）**
+
 ```
 职责：组合 Prompt + Model + Parser
 导出：可调用的 Chain
@@ -270,17 +289,17 @@ data: [DONE]
 interface ChatState {
   // 消息相关
   messages: Message[];
-  
+
   // 加载状态
   isLoading: boolean;
-  
+
   // 错误处理
   error: string | null;
-  
+
   // Agent 阶段扩展（预留）
-  currentTool: string | null;      // 当前执行的工具
-  toolStatus: ToolStatus | null;   // 工具执行状态
-  
+  currentTool: string | null; // 当前执行的工具
+  toolStatus: ToolStatus | null; // 工具执行状态
+
   // Actions
   addMessage: (message: Message) => void;
   updateLastMessage: (content: string) => void;
@@ -313,23 +332,77 @@ function ChatInterface() {
 
 ### 状态说明
 
-| 状态 | 类型 | 用途 | 阶段 |
-|------|------|------|------|
-| `messages` | `Message[]` | 完整对话历史 | 1 |
-| `isLoading` | `boolean` | 是否正在等待 AI 回复 | 1 |
-| `error` | `string \| null` | 错误信息 | 1 |
-| `currentTool` | `string \| null` | 当前执行的工具名 | 3 |
-| `toolStatus` | `ToolStatus \| null` | 工具执行状态 | 3 |
+| 状态          | 类型                 | 用途                 | 阶段 |
+| ------------- | -------------------- | -------------------- | ---- |
+| `messages`    | `Message[]`          | 完整对话历史         | 1    |
+| `isLoading`   | `boolean`            | 是否正在等待 AI 回复 | 1    |
+| `error`       | `string \| null`     | 错误信息             | 1    |
+| `currentTool` | `string \| null`     | 当前执行的工具名     | 3    |
+| `toolStatus`  | `ToolStatus \| null` | 工具执行状态         | 3    |
 
 ### 为什么选择 Zustand
 
-| 特点 | 说明 |
-|------|------|
-| 轻量 | 仅 ~1KB，无 boilerplate |
-| 简单 | 不需要 Provider 包裹 |
-| TypeScript | 原生支持，类型推断好 |
-| 调试 | 支持 Redux DevTools |
-| 扩展性 | 适合从简单到复杂的演进 |
+| 特点       | 说明                    |
+| ---------- | ----------------------- |
+| 轻量       | 仅 ~1KB，无 boilerplate |
+| 简单       | 不需要 Provider 包裹    |
+| TypeScript | 原生支持，类型推断好    |
+| 调试       | 支持 Redux DevTools     |
+| 扩展性     | 适合从简单到复杂的演进  |
+
+---
+
+## 数据库架构（阶段 4）
+
+使用 **Supabase PostgreSQL** 存储用户会话和消息。
+
+### 数据表
+
+```sql
+-- 会话表
+sessions (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id),
+  title TEXT,
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ
+)
+
+-- 消息表
+messages (
+  id UUID PRIMARY KEY,
+  session_id UUID REFERENCES sessions(id),
+  role TEXT CHECK (role IN ('user', 'assistant', 'system')),
+  content TEXT,
+  tool_calls JSONB,  -- 工具调用记录
+  created_at TIMESTAMPTZ
+)
+```
+
+### Row Level Security
+
+```sql
+-- 用户只能访问自己的会话和消息
+CREATE POLICY "Users can manage own sessions" ON sessions
+  FOR ALL USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can manage messages in own sessions" ON messages
+  FOR ALL USING (session_id IN (SELECT id FROM sessions WHERE user_id = auth.uid()));
+```
+
+### 数据流
+
+```
+登录用户发送消息
+    │
+    ├─► 创建/获取 session
+    │
+    ├─► 保存用户消息到 messages 表
+    │
+    ├─► 调用 AI 获取回复
+    │
+    └─► 保存助手消息到 messages 表
+```
 
 ---
 
@@ -338,19 +411,33 @@ function ChatInterface() {
 ```bash
 # .env.local
 
-# 智谱 AI API Key
-ZHIPU_API_KEY=your_api_key_here
+# LLM 配置（阿里云灵积/通义千问）
+DASHSCOPE_API_KEY=your_dashscope_api_key
+LLM_MODEL=qwen-plus
+LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
-# 可选：指定模型
-ZHIPU_MODEL=glm-4-flash
+# MCP 工具 API Key（阶段 3）
+AMAP_API_KEY=your_amap_api_key
+VARIFLIGHT_API_KEY=your_variflight_api_key
+
+# Supabase 配置（阶段 4）
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 **变量说明：**
 
-| 变量 | 必需 | 说明 |
-|------|------|------|
-| `ZHIPU_API_KEY` | 是 | 智谱开放平台 API 密钥 |
-| `ZHIPU_MODEL` | 否 | 模型名称，默认 glm-4-flash |
+| 变量                            | 必需   | 说明                     |
+| ------------------------------- | ------ | ------------------------ |
+| `DASHSCOPE_API_KEY`             | 是     | 阿里云灵积 API 密钥      |
+| `LLM_MODEL`                     | 否     | 模型名称，默认 qwen-plus |
+| `LLM_BASE_URL`                  | 否     | 模型 API 地址            |
+| `AMAP_API_KEY`                  | 是\*   | 高德地图 API Key         |
+| `VARIFLIGHT_API_KEY`            | 否     | 飞常准 API Key           |
+| `NEXT_PUBLIC_SUPABASE_URL`      | 是\*\* | Supabase 项目 URL        |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 是\*\* | Supabase 匿名 Key        |
+
+\*工具调用功能需要 \*\*持久化功能需要
 
 ---
 
@@ -358,30 +445,31 @@ ZHIPU_MODEL=glm-4-flash
 
 ### 核心依赖
 
-| 包名 | 用途 |
-|------|------|
-| `next` | React 全栈框架 |
-| `react` | UI 库 |
-| `zustand` | 状态管理 |
-| `langchain` | LLM 应用框架 |
+| 包名                   | 用途               |
+| ---------------------- | ------------------ |
+| `next`                 | React 全栈框架     |
+| `react`                | UI 库              |
+| `zustand`              | 状态管理           |
+| `langchain`            | LLM 应用框架       |
 | `@langchain/community` | 社区集成（含智谱） |
 
 ### 开发依赖
 
-| 包名 | 用途 |
-|------|------|
-| `typescript` | 类型支持 |
-| `tailwindcss` | 样式 |
-| `@types/react` | React 类型 |
-| `eslint` | 代码检查 |
-| `prettier` | 代码格式化 |
+| 包名                     | 用途                   |
+| ------------------------ | ---------------------- |
+| `typescript`             | 类型支持               |
+| `tailwindcss`            | 样式                   |
+| `@types/react`           | React 类型             |
+| `eslint`                 | 代码检查               |
+| `prettier`               | 代码格式化             |
 | `eslint-config-prettier` | ESLint + Prettier 兼容 |
-| `husky` | Git 钩子 |
-| `lint-staged` | 暂存文件检查 |
+| `husky`                  | Git 钩子               |
+| `lint-staged`            | 暂存文件检查           |
 
 ### UI 组件（shadcn/ui）
 
 按需添加，初始建议：
+
 - `button`
 - `input`
 - `card`
@@ -391,12 +479,12 @@ ZHIPU_MODEL=glm-4-flash
 
 ## 错误处理策略
 
-| 错误类型 | 处理方式 |
-|----------|----------|
-| API Key 无效 | 返回 401，前端显示配置提示 |
-| 网络超时 | 返回 504，前端提示重试 |
-| 模型限流 | 返回 429，前端显示稍后再试 |
-| 输入过长 | 前端校验 + API 校验，提示缩短 |
+| 错误类型     | 处理方式                      |
+| ------------ | ----------------------------- |
+| API Key 无效 | 返回 401，前端显示配置提示    |
+| 网络超时     | 返回 504，前端提示重试        |
+| 模型限流     | 返回 429，前端显示稍后再试    |
+| 输入过长     | 前端校验 + API 校验，提示缩短 |
 
 ---
 
@@ -421,12 +509,12 @@ ZHIPU_MODEL=glm-4-flash
 
 为后续阶段预留的扩展：
 
-| 阶段 | 扩展点 | 位置 |
-|------|--------|------|
-| 阶段 2 | 流式响应 | `/api/chat/route.ts` |
-| 阶段 3 | 工具调用 | `lib/langchain/tools/` |
-| 后续 | 数据库 | `lib/db/` |
-| 后续 | RAG | `lib/langchain/retriever.ts` |
+| 阶段   | 扩展点   | 位置                         |
+| ------ | -------- | ---------------------------- |
+| 阶段 2 | 流式响应 | `/api/chat/route.ts`         |
+| 阶段 3 | 工具调用 | `lib/langchain/tools/`       |
+| 后续   | 数据库   | `lib/db/`                    |
+| 后续   | RAG      | `lib/langchain/retriever.ts` |
 
 ---
 
@@ -434,11 +522,11 @@ ZHIPU_MODEL=glm-4-flash
 
 ### 测试框架
 
-| 工具 | 用途 |
-|------|------|
-| Vitest | 单元测试运行器 |
-| React Testing Library | 组件测试 |
-| MSW | API Mock |
+| 工具                  | 用途           |
+| --------------------- | -------------- |
+| Vitest                | 单元测试运行器 |
+| React Testing Library | 组件测试       |
+| MSW                   | API Mock       |
 
 ### 测试文件结构
 
@@ -468,8 +556,7 @@ npm run test:coverage # 覆盖率报告
 ```yaml
 # .github/workflows/ci.yml
 触发条件: PR 到 main 分支
-步骤:
-  1. 安装依赖
+步骤: 1. 安装依赖
   2. ESLint 检查
   3. TypeScript 类型检查
   4. 运行测试
@@ -514,4 +601,4 @@ openspec/
 
 ---
 
-*最后更新：2026-01-22*
+_最后更新：2026-01-27（阶段 4 持久化完成）_

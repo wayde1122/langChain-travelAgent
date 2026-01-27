@@ -6,15 +6,15 @@ import { MapPin, Compass, HelpCircle } from 'lucide-react';
 const suggestions = [
   {
     icon: MapPin,
-    text: '日本有什么值得去的地方？',
+    text: '成都有哪些必吃的美食和小吃？',
   },
   {
     icon: Compass,
-    text: '帮我规划一个 5 天的北京行程',
+    text: '3000 元预算能去哪里玩一周？',
   },
   {
     icon: HelpCircle,
-    text: '去泰国旅游需要准备什么？',
+    text: '带孩子去三亚有什么推荐？',
   },
 ];
 

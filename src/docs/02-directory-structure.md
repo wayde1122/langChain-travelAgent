@@ -334,7 +334,7 @@ export function ChatInput() {
 
 ## 阶段演进
 
-### 阶段 1（当前）
+### 阶段 1 - 基础对话 ✅
 
 ```
 src/
@@ -347,31 +347,55 @@ src/
 └── types/chat.ts              ✅
 ```
 
-### 阶段 2（流式）
+### 阶段 2 - 流式输出 ✅
 
 ```
 src/
-├── app/api/chat/
-│   └── stream/route.ts        ➕ 新增
-├── hooks/useChat.ts           ➕ 新增（使用 Vercel AI SDK）
+├── app/api/chat/route.ts      ✅ 支持 SSE 流式响应
+├── services/chat.ts           ✅ 流式消息处理
 └── components/chat/
-    └── StopButton.tsx         ➕ 新增
+    └── LoadingIndicator.tsx   ✅ 加载状态 + 停止按钮
 ```
 
-### 阶段 3（工具调用）
+### 阶段 3 - 工具调用 ✅
 
 ```
 src/
-├── app/api/tools/             ➕ 新增
-│   ├── weather/route.ts
-│   └── exchange/route.ts
-├── lib/langchain/tools/       ➕ 新增
-│   ├── weather.ts
-│   └── exchange.ts
+├── lib/langchain/
+│   ├── agent.ts               ✅ ReAct Agent
+│   ├── mcp-client.ts          ✅ MCP 客户端
+│   └── tools/
+│       ├── current-date.ts    ✅ 日期工具
+│       └── index.ts           ✅ 工具导出 + 显示名称
 └── components/chat/
-    └── ToolStatus.tsx         ➕ 新增
+    └── ToolCallSteps.tsx      ✅ 工具调用展示
+```
+
+### 阶段 4 - 持久化 ✅
+
+```
+src/
+├── app/auth/                  ✅ 认证页面
+│   ├── login/page.tsx
+│   └── signup/page.tsx
+├── components/auth/           ✅ 认证组件
+│   ├── AuthProvider.tsx
+│   └── UserMenu.tsx
+├── components/chat/
+│   ├── ChatLayout.tsx         ✅ 布局（含侧边栏）
+│   └── Sidebar.tsx            ✅ 会话列表
+├── lib/supabase/              ✅ Supabase 客户端
+│   ├── client.ts
+│   ├── server.ts
+│   └── middleware.ts
+├── services/session.ts        ✅ 会话 CRUD
+├── store/session-store.ts     ✅ 会话状态
+├── types/database.ts          ✅ 数据库类型
+├── middleware.ts              ✅ Auth 中间件
+└── supabase/migrations/       ✅ 数据库迁移
+    └── 001_create_tables.sql
 ```
 
 ---
 
-_文档创建时间：2026-01-23_
+_文档更新时间：2026-01-27_

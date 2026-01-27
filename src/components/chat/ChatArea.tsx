@@ -1,20 +1,40 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import { Loader2, Menu } from 'lucide-react';
+
 import { useChatStore } from '@/store';
 import { chatService } from '@/services';
+import { Button } from '@/components/ui/button';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
 import { WelcomeScreen } from './WelcomeScreen';
 
 import type { ApiMessage, ToolCallStep } from '@/types';
+import type { MessageWithTools } from '@/store/chat-store';
+
+interface ChatAreaProps {
+  /** 消息发送完成后的回调，用于持久化 */
+  onMessageSent?: (
+    userMessage: string,
+    assistantMessage: MessageWithTools
+  ) => void;
+  /** 是否正在加载历史消息 */
+  isLoadingHistory?: boolean;
+  /** 打开移动端侧边栏的回调 */
+  onOpenMobileSidebar?: () => void;
+}
 
 /**
  * 聊天区域组件
  * 包含消息列表、输入框和欢迎屏幕
  * 支持 Agent 流式输出和工具调用展示
  */
-export function ChatArea() {
+export function ChatArea({
+  onMessageSent,
+  isLoadingHistory = false,
+  onOpenMobileSidebar,
+}: ChatAreaProps) {
   const {
     messages,
     isLoading,
@@ -42,6 +62,9 @@ export function ChatArea() {
   // 取消函数引用
   const cancelRef = useRef<(() => void) | null>(null);
 
+  // 当前用户消息内容（用于回调）
+  const currentUserMessageRef = useRef<string>('');
+
   /**
    * 发送消息（Agent 流式）
    * @param content - 消息内容
@@ -49,6 +72,9 @@ export function ChatArea() {
    */
   const handleSend = useCallback(
     async (content: string, historyMessages?: ApiMessage[]) => {
+      // 保存用户消息内容
+      currentUserMessageRef.current = content;
+
       // 添加用户消息（重新生成时不需要添加）
       if (!historyMessages) {
         addMessage({ role: 'user', content });
@@ -125,6 +151,17 @@ export function ChatArea() {
             // 流式传输完成
             if (streamingMessageIdRef.current) {
               setMessageStreaming(streamingMessageIdRef.current, false);
+
+              // 调用持久化回调
+              if (onMessageSent) {
+                const currentMessages = useChatStore.getState().messages;
+                const assistantMsg = currentMessages.find(
+                  (m) => m.id === streamingMessageIdRef.current
+                );
+                if (assistantMsg) {
+                  onMessageSent(currentUserMessageRef.current, assistantMsg);
+                }
+              }
             }
             setLoading(false);
             setIsStreamingLocal(false);
@@ -186,6 +223,7 @@ export function ChatArea() {
       setError,
       addToolCall,
       updateToolCall,
+      onMessageSent,
     ]
   );
 
@@ -267,21 +305,69 @@ export function ChatArea() {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
         <div className="flex items-center gap-2">
+          {/* 移动端汉堡菜单 */}
+          {onOpenMobileSidebar && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden h-8 w-8"
+              onClick={onOpenMobileSidebar}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          )}
           <span className="font-medium text-neutral-900">Travel Assistant</span>
-          <span className="text-xs text-muted-foreground">(Agent Mode)</span>
+          <span className="text-xs text-muted-foreground hidden sm:inline">
+            (Agent Mode)
+          </span>
         </div>
       </div>
 
       {/* Content */}
-      {messages.length === 0 ? (
+      {isLoadingHistory ? (
+        <div className="flex-1 overflow-auto">
+          <div className="mx-auto max-w-3xl px-4 py-6 space-y-6 animate-in fade-in duration-200">
+            {/* 骨架屏 - 模拟消息加载 */}
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="space-y-4">
+                {/* 用户消息骨架 */}
+                <div className="flex justify-end">
+                  <div className="max-w-[70%] space-y-2">
+                    <div
+                      className="h-4 rounded-full bg-neutral-200 animate-pulse"
+                      style={{ width: `${60 + i * 10}%` }}
+                    />
+                  </div>
+                </div>
+                {/* AI 消息骨架 */}
+                <div className="flex gap-3">
+                  <div className="h-8 w-8 rounded-full bg-neutral-200 animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-3/4 rounded-full bg-neutral-200 animate-pulse" />
+                    <div className="h-4 w-full rounded-full bg-neutral-200 animate-pulse" />
+                    <div className="h-4 w-2/3 rounded-full bg-neutral-200 animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            ))}
+            {/* 加载提示 */}
+            <div className="flex items-center justify-center gap-2 text-muted-foreground pt-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">加载对话历史...</span>
+            </div>
+          </div>
+        </div>
+      ) : messages.length === 0 ? (
         <WelcomeScreen onSuggestionClick={handleSuggestionClick} />
       ) : (
-        <MessageList
-          messages={messages}
-          isLoading={isLoading && !isStreamingLocal}
-          regeneratingId={regeneratingId}
-          onRegenerate={handleRegenerate}
-        />
+        <div className="flex-1 overflow-hidden animate-in fade-in duration-300">
+          <MessageList
+            messages={messages}
+            isLoading={isLoading && !isStreamingLocal}
+            regeneratingId={regeneratingId}
+            onRegenerate={handleRegenerate}
+          />
+        </div>
       )}
 
       {/* Input */}

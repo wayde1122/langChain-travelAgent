@@ -343,29 +343,57 @@ npm install @langchain/community --legacy-peer-deps
 **`.env.example`**（提交到 Git）
 
 ```env
-# 智谱 AI API Key
-ZHIPU_API_KEY=your_api_key_here
+# LLM 配置（阿里云灵积/通义千问）
+DASHSCOPE_API_KEY=your_dashscope_api_key
+LLM_MODEL=qwen-plus
+LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
-# 应用配置
-NEXT_PUBLIC_APP_NAME=Travel Assistant
+# MCP 工具 API Key（阶段 3）
+AMAP_API_KEY=your_amap_api_key
+VARIFLIGHT_API_KEY=your_variflight_api_key
+
+# Supabase 配置（阶段 4）
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 **`.env.local`**（不提交到 Git）
 
 ```env
-# 智谱 AI API Key
-ZHIPU_API_KEY=your_actual_api_key
+# LLM 配置
+DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxx
+LLM_MODEL=qwen-plus
+LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
-# 应用配置
-NEXT_PUBLIC_APP_NAME=Travel Assistant
+# MCP 工具 API Key
+AMAP_API_KEY=xxxxxxxxxxxxxxxx
+VARIFLIGHT_API_KEY=xxxxxxxxxxxxxxxx
+
+# Supabase 配置
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxxxxxxx
 ```
 
 ### 获取 API Key
 
-1. 访问 [智谱 AI 开放平台](https://open.bigmodel.cn/)
+**1. 阿里云灵积（LLM）**
+
+1. 访问 [阿里云灵积平台](https://dashscope.console.aliyun.com/)
 2. 注册并登录账号
 3. 在控制台创建 API Key
-4. 复制 API Key 到 `.env.local` 文件
+4. 复制 API Key 到 `DASHSCOPE_API_KEY`
+
+**2. 高德地图（天气/POI）**
+
+1. 访问 [高德开放平台](https://lbs.amap.com/)
+2. 创建应用，选择"Web服务"
+3. 复制 Key 到 `AMAP_API_KEY`
+
+**3. 飞常准（航班查询）**
+
+1. 访问 [飞常准开放平台](https://open.variflight.com/)
+2. 注册并创建应用
+3. 复制 API Key 到 `VARIFLIGHT_API_KEY`
 
 ---
 
@@ -452,4 +480,4 @@ travel-assistant/
 
 ---
 
-_文档创建时间：2026-01-23_
+_文档更新时间：2026-01-27_
