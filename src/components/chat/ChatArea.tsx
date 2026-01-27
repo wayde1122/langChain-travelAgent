@@ -360,7 +360,7 @@ export function ChatArea({
       ) : messages.length === 0 ? (
         <WelcomeScreen onSuggestionClick={handleSuggestionClick} />
       ) : (
-        <div className="flex-1 overflow-hidden animate-in fade-in duration-300">
+        <div className="flex-1 min-h-0 overflow-hidden animate-in fade-in duration-300">
           <MessageList
             messages={messages}
             isLoading={isLoading && !isStreamingLocal}

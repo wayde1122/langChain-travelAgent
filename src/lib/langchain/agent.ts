@@ -13,13 +13,19 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { Message, AgentEvent } from '@/types';
 
 import { createChatModel } from './model';
-import { TRAVEL_AGENT_SYSTEM_PROMPT } from './prompts';
+import { TRAVEL_AGENT_SYSTEM_PROMPT, RAG_AGENT_SYSTEM_PROMPT } from './prompts';
 import { localTools, TOOL_DISPLAY_NAMES } from './tools';
 import {
   initializeMCPClient,
   getMCPTools,
   MCP_TOOL_DISPLAY_NAMES,
 } from './mcp-client';
+import {
+  retrieveKnowledge,
+  shouldRetrieve,
+  extractCityFromQuery,
+  type RetrievalContext,
+} from './rag';
 
 /**
  * 获取工具的显示名称
@@ -48,8 +54,22 @@ function convertToLangChainMessages(messages: Message[]): BaseMessage[] {
 
 /**
  * 创建 Agent 提示模板
+ * @param ragContext RAG 检索上下文（可选）
  */
-function createAgentPrompt(): ChatPromptTemplate {
+function createAgentPrompt(ragContext?: RetrievalContext): ChatPromptTemplate {
+  // 如果有 RAG 上下文，使用 RAG 增强的提示词
+  if (ragContext?.hasResults) {
+    const promptWithContext = RAG_AGENT_SYSTEM_PROMPT.replace(
+      '{context}',
+      ragContext.formattedContext
+    );
+    return ChatPromptTemplate.fromMessages([
+      ['system', promptWithContext],
+      new MessagesPlaceholder('messages'),
+    ]);
+  }
+
+  // 否则使用基础提示词
   return ChatPromptTemplate.fromMessages([
     ['system', TRAVEL_AGENT_SYSTEM_PROMPT],
     new MessagesPlaceholder('messages'),
@@ -72,8 +92,9 @@ async function getAllTools(): Promise<StructuredToolInterface[]> {
 
 /**
  * 创建 ReAct Agent
+ * @param ragContext RAG 检索上下文（可选）
  */
-export async function createTravelAgent() {
+export async function createTravelAgent(ragContext?: RetrievalContext) {
   const model = createChatModel();
   const tools = await getAllTools();
 
@@ -86,7 +107,7 @@ export async function createTravelAgent() {
   const agent = createReactAgent({
     llm: model,
     tools,
-    prompt: createAgentPrompt(),
+    prompt: createAgentPrompt(ragContext),
   });
 
   return agent;
@@ -116,7 +137,23 @@ export async function* executeAgentStream(
   const { input, history = [] } = params;
 
   try {
-    const agent = await createTravelAgent();
+    // RAG 检索
+    let ragContext: RetrievalContext | undefined;
+
+    if (shouldRetrieve(input)) {
+      console.log('\n🔍 执行 RAG 检索...');
+      const city = extractCityFromQuery(input);
+      ragContext = await retrieveKnowledge(input, { city });
+
+      if (ragContext.hasResults) {
+        yield {
+          type: 'thinking',
+          content: `正在检索相关知识（找到 ${ragContext.results.length} 条）...`,
+        };
+      }
+    }
+
+    const agent = await createTravelAgent(ragContext);
     const historyMessages = convertToLangChainMessages(history);
 
     // 构建输入消息
@@ -131,6 +168,10 @@ export async function* executeAgentStream(
     console.log('\n========== Agent 执行开始 ==========');
     console.log('📝 用户输入:', input);
     console.log('📚 历史消息数:', history.length);
+    console.log(
+      '🔍 RAG 结果:',
+      ragContext?.hasResults ? `${ragContext.results.length} 条` : '无'
+    );
 
     for await (const event of eventStream) {
       const eventType = event.event;
@@ -229,7 +270,15 @@ export async function executeAgent(
   const { input, history = [] } = params;
 
   try {
-    const agent = await createTravelAgent();
+    // RAG 检索
+    let ragContext: RetrievalContext | undefined;
+
+    if (shouldRetrieve(input)) {
+      const city = extractCityFromQuery(input);
+      ragContext = await retrieveKnowledge(input, { city });
+    }
+
+    const agent = await createTravelAgent(ragContext);
     const historyMessages = convertToLangChainMessages(history);
     const messages = [...historyMessages, new HumanMessage(input)];
 

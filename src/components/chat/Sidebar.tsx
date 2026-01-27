@@ -23,6 +23,12 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useAuth } from '@/components/auth';
 import { useChatStore } from '@/store';
 import { cn } from '@/lib/utils';
@@ -91,24 +97,68 @@ export function Sidebar({
 
   if (collapsed) {
     return (
-      <div className="flex h-full w-16 flex-col bg-neutral-900 p-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="mb-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-          onClick={onToggleCollapse}
-        >
-          <PanelLeft className="h-5 w-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="mb-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-          onClick={onNewChat}
-        >
-          <Plus className="h-5 w-5" />
-        </Button>
-      </div>
+      <TooltipProvider delayDuration={100}>
+        <div className="flex h-full w-16 flex-col bg-neutral-900 p-2">
+          {/* 展开按钮 */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="mb-2 cursor-pointer text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                onClick={onToggleCollapse}
+              >
+                <PanelLeft className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">展开侧边栏</TooltipContent>
+          </Tooltip>
+
+          {/* 新建对话 */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="mb-2 cursor-pointer text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                onClick={onNewChat}
+              >
+                <Plus className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">新建对话</TooltipContent>
+          </Tooltip>
+
+          <Separator className="my-2 bg-neutral-800" />
+
+          {/* 会话缩略图列表 */}
+          <ScrollArea className="flex-1">
+            <div className="space-y-1">
+              {conversations.slice(0, 20).map((conv) => (
+                <Tooltip key={conv.id}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        'w-full cursor-pointer text-neutral-400 hover:bg-neutral-800 hover:text-white',
+                        currentConversationId === conv.id &&
+                          'bg-neutral-800 text-white'
+                      )}
+                      onClick={() => onSelectConversation(conv.id)}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-[200px]">
+                    {conv.title}
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+      </TooltipProvider>
     );
   }
 

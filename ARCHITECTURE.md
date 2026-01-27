@@ -72,7 +72,17 @@ travel-assistant/
 │   ├── langchain/              # LangChain 相关
 │   │   ├── model.ts            # 模型配置
 │   │   ├── prompts.ts          # 提示词模板
-│   │   └── chain.ts            # 链式调用（阶段 2+）
+│   │   ├── agent.ts            # ReAct Agent（阶段 3）
+│   │   ├── chain.ts            # 链式调用（阶段 2+）
+│   │   ├── tools/              # 本地工具（阶段 3）
+│   │   ├── mcp-client.ts       # MCP 客户端（阶段 3）
+│   │   └── rag/                # RAG 模块（阶段 5）
+│   │       ├── embeddings.ts   # Embedding 配置
+│   │       ├── loader.ts       # JSONL 加载器
+│   │       ├── splitter.ts     # 文档切分器
+│   │       ├── store.ts        # 向量存储
+│   │       ├── retriever.ts    # 检索器
+│   │       └── index.ts        # 统一导出
 │   ├── supabase/               # Supabase 配置（阶段 4）
 │   │   ├── client.ts           # 浏览器端客户端
 │   │   ├── server.ts           # 服务端客户端
@@ -505,16 +515,117 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 ---
 
+## RAG 知识增强模块（阶段 5）
+
+### 架构概览
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        知识导入流程                                  │
+│  ┌───────────────┐    ┌───────────┐    ┌───────────┐    ┌────────┐ │
+│  │ knowledge.jsonl│ → │ Loader    │ → │ Splitter  │ → │Embedding│ │
+│  │ (701 条景点)  │    │ (解析)    │    │ (切分)    │    │ (向量) │ │
+│  └───────────────┘    └───────────┘    └───────────┘    └────────┘ │
+│                                                              │      │
+│                                                              ▼      │
+│                                              ┌─────────────────────┐│
+│                                              │  Supabase pgvector  ││
+│                                              │  knowledge_documents││
+│                                              └─────────────────────┘│
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                        查询检索流程                                  │
+│  ┌───────────┐    ┌───────────┐    ┌────────────────┐              │
+│  │ 用户问题   │ → │ Embedding │ → │ 相似度搜索      │              │
+│  │ "三亚玩什么"│    │ (向量化)  │    │ (Top-K + 阈值) │              │
+│  └───────────┘    └───────────┘    └────────────────┘              │
+│                                              │                      │
+│                                              ▼                      │
+│  ┌────────────────────────────────────────────────────────────────┐│
+│  │                   RAG 增强 Agent                               ││
+│  │  System Prompt + 检索知识上下文 + 用户问题 → LLM → 回答        ││
+│  └────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 模块结构
+
+```
+src/lib/langchain/rag/
+├── index.ts           # 统一导出
+├── embeddings.ts      # Embedding 模型配置（text-embedding-v3, 1024维）
+├── loader.ts          # JSONL 文档加载器
+├── splitter.ts        # 文档切分器（chunkSize: 1000）
+├── store.ts           # 向量存储（Supabase pgvector）
+└── retriever.ts       # 知识检索器（top-k=3, 阈值=0.65）
+
+src/data/knowledge/
+└── knowledge.jsonl    # 701 条景点知识数据
+
+scripts/
+└── ingest-knowledge.ts  # 知识导入脚本
+```
+
+### 数据库表
+
+```sql
+-- knowledge_documents 表
+CREATE TABLE knowledge_documents (
+  id UUID PRIMARY KEY,
+  content TEXT NOT NULL,           -- 文档内容
+  metadata JSONB DEFAULT '{}',     -- 元数据（name, city, tags, rating）
+  embedding VECTOR(1024),          -- 1024维向量
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ
+);
+
+-- HNSW 索引（高效向量搜索）
+CREATE INDEX ON knowledge_documents
+USING hnsw (embedding vector_cosine_ops);
+```
+
+### 检索策略
+
+| 参数   | 值   | 说明                   |
+| ------ | ---- | ---------------------- |
+| Top-K  | 3    | 返回最相关的 3 条结果  |
+| 阈值   | 0.65 | 相似度低于此值的过滤掉 |
+| 按城市 | 可选 | 自动从问题提取城市筛选 |
+
+### 环境变量
+
+```bash
+# RAG 相关（在 .env.local 中配置）
+DASHSCOPE_API_KEY=xxx           # Embedding 模型 API Key（与 LLM 共用）
+SUPABASE_SERVICE_ROLE_KEY=xxx   # 知识导入脚本需要
+```
+
+### 使用命令
+
+```bash
+# 模拟导入（不写入数据库）
+npm run ingest:dry-run
+
+# 正式导入
+npm run ingest
+
+# 清空后重新导入
+npm run ingest:clear
+```
+
+---
+
 ## 扩展点预留
 
 为后续阶段预留的扩展：
 
-| 阶段   | 扩展点   | 位置                         |
-| ------ | -------- | ---------------------------- |
-| 阶段 2 | 流式响应 | `/api/chat/route.ts`         |
-| 阶段 3 | 工具调用 | `lib/langchain/tools/`       |
-| 后续   | 数据库   | `lib/db/`                    |
-| 后续   | RAG      | `lib/langchain/retriever.ts` |
+| 阶段   | 扩展点   | 位置                   | 状态      |
+| ------ | -------- | ---------------------- | --------- |
+| 阶段 2 | 流式响应 | `/api/chat/route.ts`   | ✅ 已完成 |
+| 阶段 3 | 工具调用 | `lib/langchain/tools/` | ✅ 已完成 |
+| 阶段 4 | 数据库   | `lib/supabase/`        | ✅ 已完成 |
+| 阶段 5 | RAG      | `lib/langchain/rag/`   | ✅ 已完成 |
 
 ---
 
@@ -601,4 +712,4 @@ openspec/
 
 ---
 
-_最后更新：2026-01-27（阶段 4 持久化完成）_
+_最后更新：2026-01-27（阶段 5 RAG 知识增强完成）_

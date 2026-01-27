@@ -39,7 +39,7 @@ export function ChatLayout() {
 
   const { clearMessages, addMessage } = useChatStore();
 
-  // 加载会话列表
+  // 加载会话列表（仅在用户 ID 变化时执行，避免切屏重复请求）
   useEffect(() => {
     if (!user) {
       setSessions([]);
@@ -60,7 +60,8 @@ export function ChatLayout() {
     };
 
     loadSessions();
-  }, [user, setSessions, setCurrentSessionId, setSessionLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // 新建对话
   const handleNewChat = useCallback(async () => {
@@ -204,9 +205,14 @@ export function ChatLayout() {
         <SheetContent
           side="left"
           className="w-72 p-0 bg-neutral-900 border-neutral-800"
+          hideCloseButton
         >
           <SheetTitle className="sr-only">导航菜单</SheetTitle>
-          <Sidebar {...sidebarProps} collapsed={false} />
+          <Sidebar
+            {...sidebarProps}
+            collapsed={false}
+            onToggleCollapse={() => setMobileSheetOpen(false)}
+          />
         </SheetContent>
       </Sheet>
 

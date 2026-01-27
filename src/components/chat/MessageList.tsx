@@ -38,7 +38,7 @@ export function MessageList({
   }, [messages, isLoading]);
 
   return (
-    <ScrollArea className="min-h-0 flex-1">
+    <ScrollArea className="h-full">
       <div className="mx-auto max-w-3xl px-4 py-6">
         {messages.map((message) => (
           <MessageItem

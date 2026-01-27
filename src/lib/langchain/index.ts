@@ -12,6 +12,7 @@ export type { LLMModelOptions } from './model';
 export {
   TRAVEL_ASSISTANT_SYSTEM_PROMPT,
   TRAVEL_AGENT_SYSTEM_PROMPT,
+  RAG_AGENT_SYSTEM_PROMPT,
   createChatPromptTemplate,
   createSimpleChatPromptTemplate,
 } from './prompts';
@@ -43,3 +44,42 @@ export {
 
 // 工具
 export { localTools, currentDateTool } from './tools';
+
+// RAG 模块
+export {
+  // Embedding
+  createEmbeddingModel,
+  embedText,
+  embedTexts,
+  EMBEDDING_CONFIG,
+  // 文档加载
+  loadPOIDocuments,
+  formatPOIContent,
+  extractMetadata,
+  getCityList,
+  // 文档切分
+  createTextSplitter,
+  splitDocument,
+  splitDocuments,
+  estimateChunkCount,
+  SPLITTER_CONFIG,
+  // 向量存储
+  addDocuments,
+  similaritySearch,
+  getKnowledgeStats,
+  clearKnowledgeBase,
+  isKnowledgeBaseEmpty,
+  STORE_CONFIG,
+  // 检索器
+  retrieveKnowledge,
+  shouldRetrieve,
+  extractCityFromQuery,
+  RETRIEVER_CONFIG,
+} from './rag';
+export type {
+  POIData,
+  POIMetadata,
+  SimilaritySearchResult,
+  RetrievalResult,
+  RetrievalContext,
+} from './rag';
