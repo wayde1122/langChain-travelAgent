@@ -21,6 +21,8 @@ interface MessageItemProps {
   };
   /** 重新生成回调 */
   onRegenerate?: (messageId: string) => void;
+  /** 建议点击回调 */
+  onSuggestionClick?: (suggestion: string) => void;
   /** 是否显示操作按钮 */
   showActions?: boolean;
   /** 是否正在加载（重新生成中） */
@@ -34,6 +36,7 @@ interface MessageItemProps {
 export function MessageItem({
   message,
   onRegenerate,
+  onSuggestionClick,
   showActions = true,
   isRegenerating = false,
 }: MessageItemProps) {
@@ -96,7 +99,10 @@ export function MessageItem({
 
                 {/* 消息内容 */}
                 {message.content ? (
-                  <MarkdownRenderer content={message.content} />
+                  <MarkdownRenderer
+                    content={message.content}
+                    onSuggestionClick={onSuggestionClick}
+                  />
                 ) : message.isStreaming ? (
                   <span className="text-muted-foreground">正在思考...</span>
                 ) : null}

@@ -29,6 +29,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/auth';
 import { useChatStore } from '@/store';
 import { cn } from '@/lib/utils';
@@ -325,6 +326,9 @@ function ConversationItem({
   onSaveEdit,
   onEditingTitleChange,
 }: ConversationItemProps) {
+  // 删除确认对话框状态
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   if (isEditing) {
     return (
       <div className="flex items-center gap-1 rounded-lg bg-neutral-800 px-2 py-1.5">
@@ -359,44 +363,58 @@ function ConversationItem({
   }
 
   return (
-    <div
-      className={cn(
-        'group flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors cursor-pointer',
-        isActive
-          ? 'bg-neutral-800 text-white'
-          : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
-      )}
-      onClick={onSelect}
-    >
-      <div className="flex flex-1 items-center gap-2 min-w-0">
-        <MessageSquare className="h-4 w-4 shrink-0" />
-        <span className="truncate">{conversation.title}</span>
+    <>
+      <div
+        className={cn(
+          'group flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors cursor-pointer',
+          isActive
+            ? 'bg-neutral-800 text-white'
+            : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
+        )}
+        onClick={onSelect}
+      >
+        <div className="flex flex-1 items-center gap-2 min-w-0">
+          <MessageSquare className="h-4 w-4 shrink-0" />
+          <span className="truncate">{conversation.title}</span>
+        </div>
+        <div className="flex shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartEdit();
+            }}
+            className="h-7 w-7 cursor-pointer text-neutral-400 hover:bg-neutral-700 hover:text-white"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDeleteConfirm(true);
+            }}
+            className="h-7 w-7 cursor-pointer text-neutral-400 hover:bg-neutral-700 hover:text-red-400"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
-      <div className="flex shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={(e) => {
-            e.stopPropagation();
-            onStartEdit();
-          }}
-          className="h-7 w-7 cursor-pointer text-neutral-400 hover:bg-neutral-700 hover:text-white"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="h-7 w-7 cursor-pointer text-neutral-400 hover:bg-neutral-700 hover:text-red-400"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-    </div>
+
+      {/* 删除确认对话框 */}
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="删除对话"
+        description={`确定要删除「${conversation.title}」吗？此操作无法撤销。`}
+        confirmText="删除"
+        cancelText="取消"
+        onConfirm={onDelete}
+        destructive
+      />
+    </>
   );
 }
 

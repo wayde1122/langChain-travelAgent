@@ -56,6 +56,11 @@ export function ChatArea({
   // 是否正在流式传输
   const [isStreamingLocal, setIsStreamingLocal] = useState(false);
 
+  // 待填充到输入框的建议内容
+  const [pendingSuggestion, setPendingSuggestion] = useState<
+    string | undefined
+  >(undefined);
+
   // 当前流式消息的 ID
   const streamingMessageIdRef = useRef<string | null>(null);
 
@@ -292,13 +297,15 @@ export function ChatArea({
     streamingMessageIdRef.current = null;
   }, [setLoading, setStreaming, setMessageStreaming]);
 
-  /** 处理建议点击 */
-  const handleSuggestionClick = useCallback(
-    (text: string) => {
-      handleSend(text);
-    },
-    [handleSend]
-  );
+  /** 处理建议点击 - 填充到输入框 */
+  const handleSuggestionClick = useCallback((text: string) => {
+    setPendingSuggestion(text);
+  }, []);
+
+  /** 清除待填充的建议 */
+  const handleSuggestionConsumed = useCallback(() => {
+    setPendingSuggestion(undefined);
+  }, []);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
@@ -366,6 +373,7 @@ export function ChatArea({
             isLoading={isLoading && !isStreamingLocal}
             regeneratingId={regeneratingId}
             onRegenerate={handleRegenerate}
+            onSuggestionClick={handleSuggestionClick}
           />
         </div>
       )}
@@ -376,6 +384,8 @@ export function ChatArea({
         onStop={handleStop}
         disabled={isLoading}
         isStreaming={isStreamingLocal}
+        externalValue={pendingSuggestion}
+        onExternalValueConsumed={handleSuggestionConsumed}
       />
     </div>
   );

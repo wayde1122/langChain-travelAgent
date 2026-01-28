@@ -11,6 +11,10 @@ interface ChatInputProps {
   disabled?: boolean;
   isStreaming?: boolean;
   placeholder?: string;
+  /** 外部控制的输入值（用于填充建议） */
+  externalValue?: string;
+  /** 外部值被消费后的回调 */
+  onExternalValueConsumed?: () => void;
 }
 
 export function ChatInput({
@@ -19,9 +23,21 @@ export function ChatInput({
   disabled = false,
   isStreaming = false,
   placeholder = '输入你的旅行问题...',
+  externalValue,
+  onExternalValueConsumed,
 }: ChatInputProps) {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 处理外部填充的值（建议点击）
+  useEffect(() => {
+    if (externalValue) {
+      setInput(externalValue);
+      onExternalValueConsumed?.();
+      // 聚焦输入框
+      textareaRef.current?.focus();
+    }
+  }, [externalValue, onExternalValueConsumed]);
 
   // 自动调整高度
   useEffect(() => {

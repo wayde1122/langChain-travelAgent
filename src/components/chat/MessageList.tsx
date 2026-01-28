@@ -16,6 +16,8 @@ interface MessageListProps {
   regeneratingId?: string | null;
   /** 重新生成回调 */
   onRegenerate?: (messageId: string) => void;
+  /** 建议点击回调 */
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
 /**
@@ -27,6 +29,7 @@ export function MessageList({
   isLoading = false,
   regeneratingId = null,
   onRegenerate,
+  onSuggestionClick,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -45,6 +48,7 @@ export function MessageList({
             key={message.id}
             message={message}
             onRegenerate={onRegenerate}
+            onSuggestionClick={onSuggestionClick}
             isRegenerating={regeneratingId === message.id}
           />
         ))}
