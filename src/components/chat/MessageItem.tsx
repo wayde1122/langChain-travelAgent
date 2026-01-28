@@ -1,10 +1,9 @@
 'use client';
 
-import { useRef } from 'react';
 import Image from 'next/image';
 import { User, RefreshCw, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { exportToPdf } from '@/lib/utils/export-pdf';
+import { exportToMarkdown } from '@/lib/utils/export-markdown';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { ToolCallSteps } from './ToolCallSteps';
 
@@ -30,7 +29,7 @@ interface MessageItemProps {
 
 /**
  * 消息项组件
- * 显示单条消息，AI 消息支持 Markdown 渲染、工具调用展示、重新生成和导出 PDF
+ * 显示单条消息，AI 消息支持 Markdown 渲染、工具调用展示、重新生成和导出 Markdown
  */
 export function MessageItem({
   message,
@@ -39,15 +38,13 @@ export function MessageItem({
   isRegenerating = false,
 }: MessageItemProps) {
   const isUser = message.role === 'user';
-  const contentRef = useRef<HTMLDivElement>(null);
   const hasToolCalls = message.toolCalls && message.toolCalls.length > 0;
 
-  /** 处理导出 PDF */
-  const handleExportPdf = () => {
-    const html = contentRef.current?.innerHTML ?? message.content;
-    exportToPdf({
-      content: html,
-      extractItinerary: true, // 只导出行程相关内容
+  /** 处理导出 Markdown */
+  const handleExportMarkdown = () => {
+    exportToMarkdown({
+      content: message.content,
+      trimByMarkers: true, // 截取开始/结束标记之间的正式内容
     });
   };
 
@@ -99,10 +96,7 @@ export function MessageItem({
 
                 {/* 消息内容 */}
                 {message.content ? (
-                  <MarkdownRenderer
-                    ref={contentRef}
-                    content={message.content}
-                  />
+                  <MarkdownRenderer content={message.content} />
                 ) : message.isStreaming ? (
                   <span className="text-muted-foreground">正在思考...</span>
                 ) : null}
@@ -133,11 +127,11 @@ export function MessageItem({
                   <span>{isRegenerating ? '生成中...' : '重新生成'}</span>
                 </button>
                 <button
-                  onClick={handleExportPdf}
+                  onClick={handleExportMarkdown}
                   className="flex cursor-pointer items-center gap-1 text-xs text-neutral-400 transition-colors hover:text-neutral-600"
                 >
                   <Download className="h-3.5 w-3.5" />
-                  <span>导出 PDF</span>
+                  <span>导出 MD</span>
                 </button>
               </div>
             )}
