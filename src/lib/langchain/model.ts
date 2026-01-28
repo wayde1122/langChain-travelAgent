@@ -27,8 +27,8 @@ interface LLMModelOptions {
  */
 const DEFAULT_MODEL_OPTIONS: Required<LLMModelOptions> = {
   model: process.env.LLM_MODEL ?? 'qwen-plus',
-  temperature: 0.7,
-  maxTokens: 2048,
+  temperature: Number(process.env.LLM_TEMPERATURE) || 0.7,
+  maxTokens: Number(process.env.LLM_MAX_TOKENS) || 4096, // 默认 4096，避免长回复被截断
 };
 
 /** API 基础 URL */
