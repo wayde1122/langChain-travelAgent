@@ -1,13 +1,9 @@
 /**
  * ReAct Agent 配置
- * 使用 LangGraph 创建具有工具调用能力的 Agent
+ * 使用 LangChain createAgent 创建具有工具调用能力的 Agent
  */
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
-import {
-  ChatPromptTemplate,
-  MessagesPlaceholder,
-} from '@langchain/core/prompts';
-import { createReactAgent } from '@langchain/langgraph/prebuilt';
+import { createAgent } from 'langchain';
 
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { Message, AgentEvent } from '@/types';
@@ -53,27 +49,20 @@ function convertToLangChainMessages(messages: Message[]): BaseMessage[] {
 }
 
 /**
- * 创建 Agent 提示模板
+ * 获取系统提示词
  * @param ragContext RAG 检索上下文（可选）
  */
-function createAgentPrompt(ragContext?: RetrievalContext): ChatPromptTemplate {
+function getSystemPrompt(ragContext?: RetrievalContext): string {
   // 如果有 RAG 上下文，使用 RAG 增强的提示词
   if (ragContext?.hasResults) {
-    const promptWithContext = RAG_AGENT_SYSTEM_PROMPT.replace(
+    return RAG_AGENT_SYSTEM_PROMPT.replace(
       '{context}',
       ragContext.formattedContext
     );
-    return ChatPromptTemplate.fromMessages([
-      ['system', promptWithContext],
-      new MessagesPlaceholder('messages'),
-    ]);
   }
 
   // 否则使用基础提示词
-  return ChatPromptTemplate.fromMessages([
-    ['system', TRAVEL_AGENT_SYSTEM_PROMPT],
-    new MessagesPlaceholder('messages'),
-  ]);
+  return TRAVEL_AGENT_SYSTEM_PROMPT;
 }
 
 /**
@@ -103,11 +92,11 @@ export async function createTravelAgent(ragContext?: RetrievalContext) {
     tools.map((t) => t.name)
   );
 
-  // 使用 LangGraph 创建 ReAct Agent
-  const agent = createReactAgent({
-    llm: model,
+  // 使用 LangChain createAgent 创建 ReAct Agent
+  const agent = createAgent({
+    model,
     tools,
-    prompt: createAgentPrompt(ragContext),
+    systemPrompt: getSystemPrompt(ragContext),
   });
 
   return agent;

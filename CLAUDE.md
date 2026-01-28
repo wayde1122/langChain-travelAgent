@@ -9,14 +9,16 @@
 **旅行助手** - 一个基于 LangChain.js + Next.js 的 AI 旅行助手应用。
 
 ### 核心功能
+
 - 旅行问答和建议
 - 行程规划
 - 实时信息查询（天气、汇率）
 - 个性化推荐
 
 ### 技术栈
+
 - **框架**: Next.js 14+ (App Router)
-- **AI**: LangChain.js + 智谱 AI (GLM)
+- **AI**: LangChain.js + 阿里云 DashScope (qwen-plus)
 - **状态**: Zustand
 - **样式**: Tailwind CSS + shadcn/ui
 - **测试**: Vitest + React Testing Library
@@ -57,12 +59,12 @@ travel-assistant/
 
 ### 命名约定
 
-| 类型 | 格式 | 示例 |
-|------|------|------|
-| 组件 | PascalCase | `ChatInput.tsx` |
-| 函数 | camelCase | `sendMessage()` |
-| 常量 | UPPER_SNAKE | `MAX_LENGTH` |
-| 类型 | PascalCase | `interface Message` |
+| 类型 | 格式        | 示例                |
+| ---- | ----------- | ------------------- |
+| 组件 | PascalCase  | `ChatInput.tsx`     |
+| 函数 | camelCase   | `sendMessage()`     |
+| 常量 | UPPER_SNAKE | `MAX_LENGTH`        |
+| 类型 | PascalCase  | `interface Message` |
 
 ### 导入顺序
 
@@ -113,11 +115,11 @@ npm run test        # 运行测试
 
 ## 关键文件说明
 
-| 文件 | 用途 |
-|------|------|
-| `ROADMAP.md` | 迭代规划和任务清单 |
-| `ARCHITECTURE.md` | 技术架构和设计文档 |
-| `SPEC.md` | 编码规范和约定 |
+| 文件                  | 用途                |
+| --------------------- | ------------------- |
+| `ROADMAP.md`          | 迭代规划和任务清单  |
+| `ARCHITECTURE.md`     | 技术架构和设计文档  |
+| `SPEC.md`             | 编码规范和约定      |
 | `openspec/project.md` | 项目上下文（给 AI） |
 
 ---
@@ -167,4 +169,4 @@ npm run test        # 运行测试
 
 ---
 
-*最后更新：2026-01-22*
+_最后更新：2026-01-28_
