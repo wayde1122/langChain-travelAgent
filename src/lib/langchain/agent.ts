@@ -151,7 +151,8 @@ export async function* executeAgentStream(
     // 使用 streamEvents 获取详细的执行事件
     const eventStream = agent.streamEvents({ messages }, { version: 'v2' });
 
-    let currentToolCallId: string | null = null;
+    // 使用 Map 跟踪多个并行工具调用
+    const toolCallIds = new Map<string, string>();
     let finalContent = '';
 
     console.log('\n========== Agent 执行开始 ==========');
@@ -174,14 +175,17 @@ export async function* executeAgentStream(
           break;
 
         case 'on_tool_start': {
-          // 工具开始执行
-          currentToolCallId = generateId();
+          // 工具开始执行 - 使用 run_id 跟踪并行工具调用
+          const runId = event.run_id ?? generateId();
+          const toolCallId = generateId();
+          toolCallIds.set(runId, toolCallId);
+
           const toolInput = event.data?.input ?? {};
-          console.log('\n🔧 [Tool Start]', event.name);
+          console.log('\n🔧 [Tool Start]', event.name, `(runId: ${runId})`);
           console.log('   📥 输入:', JSON.stringify(toolInput, null, 2));
           yield {
             type: 'tool_start',
-            id: currentToolCallId,
+            id: toolCallId,
             name: event.name,
             displayName: getToolDisplayName(event.name),
             input: toolInput,
@@ -190,24 +194,27 @@ export async function* executeAgentStream(
         }
 
         case 'on_tool_end': {
-          // 工具执行完成
-          if (currentToolCallId) {
+          // 工具执行完成 - 根据 run_id 匹配对应的工具调用
+          const runId = event.run_id;
+          const toolCallId = runId ? toolCallIds.get(runId) : null;
+
+          if (toolCallId) {
             const toolOutput =
               typeof event.data?.output === 'string'
                 ? event.data.output
                 : JSON.stringify(event.data?.output ?? '');
-            console.log('✅ [Tool End]', event.name);
+            console.log('✅ [Tool End]', event.name, `(runId: ${runId})`);
             console.log(
               '   📤 输出:',
               toolOutput.slice(0, 200) + (toolOutput.length > 200 ? '...' : '')
             );
             yield {
               type: 'tool_end',
-              id: currentToolCallId,
+              id: toolCallId,
               name: event.name,
               output: toolOutput,
             };
-            currentToolCallId = null;
+            toolCallIds.delete(runId);
           }
           break;
         }
