@@ -9,6 +9,11 @@
 </p>
 
 <p align="center">
+  <a href="https://lang-chain-travel-agent.vercel.app/" target="_blank">🌐 在线演示</a> •
+  <a href="https://github.com/wayde1122/langChain-travelAgent" target="_blank">📦 GitHub</a>
+</p>
+
+<p align="center">
   <a href="#功能特性">功能特性</a> •
   <a href="#技术栈">技术栈</a> •
   <a href="#快速开始">快速开始</a> •
@@ -61,8 +66,8 @@
 1. **克隆仓库**
 
 ```bash
-git clone https://github.com/your-username/travel-assistant.git
-cd travel-assistant
+git clone https://github.com/wayde1122/langChain-travelAgent.git
+cd langChain-travelAgent
 ```
 
 2. **安装依赖**
@@ -253,5 +258,5 @@ npm run format
 ---
 
 <p align="center">
-  Made with ❤️ by <a href="https://github.com/your-username">Your Name</a>
+  Made with  by <a href="https://github.com/wayde1122">wayde1122</a>
 </p>
