@@ -31,6 +31,14 @@
 
 ---
 
+## 📸 截图预览
+
+<p align="center">
+  <img src="public/screenshot.png" alt="Screenshot" width="800">
+</p>
+
+---
+
 ## ✨ 功能特性
 
 - 🤖 **智能对话** - 基于大语言模型的多轮对话，流式输出实时响应

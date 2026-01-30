@@ -31,6 +31,14 @@
 
 ---
 
+## 📸 Screenshots
+
+<p align="center">
+  <img src="public/screenshot.png" alt="Screenshot" width="800">
+</p>
+
+---
+
 ## ✨ Features
 
 - 🤖 **Intelligent Conversation** - Multi-turn dialogue powered by LLM with real-time streaming output
